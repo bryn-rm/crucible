@@ -99,6 +99,20 @@ npm run dev
 
 The frontend can run against a mock WebSocket that replays canned events in the contract's shape, so the live match view can be built before the backend streams real matches. Point it at the real backend once matches stream.
 
+Deployment
+
+Backend on Railway, frontend on Vercel — this is a monorepo, so each service's root directory must be set explicitly in that platform's project settings.
+
+Railway (backend)
+- Root directory: `backend`
+- Config: `backend/railway.toml` (start command, healthcheck at `/health`)
+- Env vars: `ANTHROPIC_API_KEY`, `ARENA_DB_PATH` (point at a mounted Railway volume, not the ephemeral filesystem — SQLite data is otherwise lost on every redeploy), `ALLOWED_ORIGINS` (the deployed Vercel URL)
+
+Vercel (frontend)
+- Root directory: `frontend`
+- Framework preset: Vite (auto-detected)
+- Env vars: `VITE_WS_URL` (the Railway backend's `wss://` WebSocket URL — Vercel is serverless and can't host the backend's long-lived WebSocket connection itself)
+
 Build order (short version)
 Scaffold — both apps boot empty and green; commit the skeleton.
 Freeze the contract — event schema + interfaces + DB models, Python and TS mirrors.

@@ -20,7 +20,10 @@ export class LiveMatchSocket implements MatchSocket {
   private ws: WebSocket;
   private handlers = new Set<(event: ServerEvent) => void>();
 
-  constructor(url: string = `${location.origin.replace(/^http/, 'ws')}/ws/match`) {
+  constructor(
+    url: string = import.meta.env.VITE_WS_URL ??
+      `${location.origin.replace(/^http/, 'ws')}/ws/match`,
+  ) {
     this.ws = new WebSocket(url);
     this.ws.onmessage = (msg) => {
       const event = JSON.parse(msg.data) as ServerEvent;
