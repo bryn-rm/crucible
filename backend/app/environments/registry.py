@@ -7,8 +7,11 @@ orchestrator changes.
 from __future__ import annotations
 
 from app.contract.interfaces import Environment
+from app.environments.negotiation import NegotiationEnvironment
 
-ENVIRONMENTS: dict[str, type[Environment]] = {}
+ENVIRONMENTS: dict[str, type[Environment]] = {
+    "negotiation": NegotiationEnvironment,
+}
 
 
 def get_environment(name: str) -> Environment:

@@ -57,6 +57,12 @@ separate repos. If they converge later, that's a bonus, not a plan.
    no Postgres, no Next.js SSR — it's an app, not a content site, and zero-infra keeps it deployable
    and finishable. Add Redis pub/sub only if you later want multi-viewer broadcast at scale.
 
+8. **Deploy first, not last.** The current laptop can't run this locally, so there is no localhost
+   fallback — Railway (backend) and Vercel (frontend) are decided upfront, not a Phase 5 afterthought,
+   and every phase after Phase 0 is built and verified against the live deployment. This is also
+   deliberate de-risking: WebSocket-over-cross-origin, CORS, and SQLite-on-ephemeral-disk are exactly
+   the issues that hide until "deploy day" — surface them in Phase 0.5, before feature work, not after.
+
 ## Tech stack
 
 - **Backend:** Python + FastAPI (async, native WebSocket), the Anthropic SDK for agents.
@@ -66,6 +72,10 @@ separate repos. If they converge later, that's a bonus, not a plan.
 - **Models:** a fast model (e.g. Haiku 4.5) for agents to keep matches cheap; a stronger model
   (e.g. Sonnet 5) for the judge where used. Confirm current model strings against the Anthropic docs
   before wiring — model-as-a-variable is itself an experiment axis, so make it config, not a constant.
+- **Deployment:** backend on **Railway** (WebSocket-capable, persistent volume for the SQLite file);
+  frontend on **Vercel**. Decided from the start, not deferred to a later phase — see Phase 0.5. All
+  development happens against these deployed instances; there is no local dev environment to fall
+  back on.
 
 ---
 
@@ -107,6 +117,30 @@ Client → server is minimal: `start_match` (env + agent configs), `cancel_match
 
 **Exit criteria:** schema + interfaces + DB models committed as types in both a Python module and a
 matching TS types file. Frozen. No feature work has started; this is pure contract.
+
+## Phase 0.5 — Deploy skeleton (before any feature work)
+
+There's no local dev environment on this machine, so the deployed stack has to exist and work
+*before* Phase 1 starts — otherwise every later phase discovers its integration problems at the end
+instead of the beginning. This phase deploys nothing interesting; it only proves the pipe works.
+
+- Deploy a minimal FastAPI app to **Railway** with one WebSocket endpoint that echoes back whatever
+  it receives.
+- Deploy a minimal Vite/React SPA to **Vercel** with a "ping" button that opens a WSS connection to
+  the Railway URL (via an env var, not a hardcoded host) and shows the echoed response.
+- Confirm the round trip actually works over **WSS across origins** — this is where CORS and
+  WebSocket-specific proxy/timeout issues on Railway's edge would show up, and they're much cheaper
+  to hit now than under Phase 2's real streaming load.
+- Attach a **persistent volume** to the Railway service for the SQLite file (Railway's default
+  container disk is ephemeral — a redeploy without a volume silently wipes the database). Write one
+  row via a throwaway endpoint, trigger a redeploy, confirm the row survived.
+- Confirm both services **auto-deploy on push to `main`** (Railway and Vercel both support this
+  natively) so that from here on, "ship a change" and "deploy a change" are the same action.
+
+**Exit criteria:** clicking "ping" on the live Vercel URL round-trips a message through the live
+Railway WebSocket and back; a row written to SQLite survives a Railway redeploy; pushing to `main`
+redeploys both services without manual steps. Nothing from Phase 1 onward is verified locally —
+everything is verified against these deployed instances.
 
 ## Phase 1 — Backend: environment + orchestrator loop (dummy agents, no LLM)
 
@@ -237,9 +271,9 @@ match counts, and replay any individual trajectory.
   another, but role-play is the one that earns its place.)
 - **Tournament mode:** run many matchups with **bounded concurrency** (`asyncio.Semaphore`) so you
   don't stampede the API rate limit — and this is where the concurrency competency shows.
-- **Demo layer:** a README with a GIF/loom, a hosted deploy, and a short "what I found" writeup (the
-  aggregate results). This is the portfolio door onto the work.
-- Deploy: backend on a small host (Railway/Fly), frontend on Vercel/Netlify, SQLite on a volume.
+- **Demo layer:** a README with a GIF/loom, a link to the (already-live, since Phase 0.5) Railway +
+  Vercel deploy, and a short "what I found" writeup (the aggregate results). This is the portfolio
+  door onto the work.
 
 ---
 
@@ -277,6 +311,12 @@ phase as its own session, review the diff, integrate at the seams.
   run enough matches, and always show N. Don't over-claim from a handful of nondeterministic runs.
 - **Scope creep into the thesis** — resist making this rigorous enough to *be* the thesis. It's a
   sandbox and a portfolio piece; the research contribution lives in the separate thesis project.
+- **No local dev environment** — this machine can't run the stack locally, so every change is
+  verified against the live Railway/Vercel deploy from Phase 0.5 onward. This is why the deploy
+  skeleton comes before feature work: cross-origin WSS, CORS, and SQLite-on-ephemeral-disk are the
+  kinds of issues that otherwise surface for the first time under Phase 2's real streaming load, or
+  worse, in Phase 5. Keep the Railway/Vercel deploy green continuously rather than batching changes
+  and discovering integration breaks late.
 
 The one to get right before anything else: the Phase 0 contract, because it's what lets two coding
 agents build in parallel without colliding — freeze it, then let the tracks run.

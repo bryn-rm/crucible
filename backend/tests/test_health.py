@@ -10,8 +10,8 @@ def test_health() -> None:
     assert resp.json() == {"status": "ok"}
 
 
-def test_list_environments_empty() -> None:
+def test_list_environments_includes_negotiation() -> None:
     with TestClient(app) as client:
         resp = client.get("/api/environments")
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert "negotiation" in resp.json()
