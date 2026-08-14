@@ -3,6 +3,7 @@ uvicorn[standard]==0.34.0
 sqlmodel==0.0.22
 pydantic==2.10.4
 anthropic==0.42.0
+openai==1.58.1
 python-dotenv==1.0.1
 websockets==14.1
 pytest==8.3.4

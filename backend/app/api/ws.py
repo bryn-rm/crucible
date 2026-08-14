@@ -7,9 +7,10 @@ that ever calls websocket.send_*. No concurrent sends from parallel agent
 tasks. `start_match` spawns the orchestrator's `run()` as a background task
 that only ever *puts* onto that queue; it never touches the socket directly.
 
-Phase 1: agents are always the scripted/dummy negotiation agent regardless of
-the requested `model` — Phase 2 swaps in the Claude-backed agent once an env
-var is set, without changing this wiring.
+Phase 2: which Agent implementation backs each requested `model` (Claude,
+OpenAI, or the scripted fallback) is resolved per-agent by
+app.agents.registry.make_negotiation_agent, keyed on model name and which
+provider API keys are configured — without changing this wiring.
 """
 
 from __future__ import annotations
@@ -22,9 +23,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 from sqlmodel import Session
 
-from app.agents.scripted import ScriptedNegotiationAgent
+from app.agents.registry import make_negotiation_agent
 from app.contract.events import AgentConfig as ClientAgentConfig
 from app.contract.events import ClientEvent, ErrorEvent, ServerEvent
+from app.contract.interfaces import Agent
 from app.contract.interfaces import AgentConfig as EnvAgentConfig
 from app.db import engine
 from app.environments.registry import get_environment
@@ -32,6 +34,17 @@ from app.orchestrator import MatchOrchestrator
 
 router = APIRouter()
 _client_event_adapter: TypeAdapter[ClientEvent] = TypeAdapter(ClientEvent)
+
+
+def _make_agent(cfg: ClientAgentConfig) -> Agent:
+    agent_config = EnvAgentConfig(
+        id=cfg.id,
+        label=cfg.label,
+        model=cfg.model,
+        strategy_prompt=cfg.strategy_prompt,
+        temperature=cfg.temperature,
+    )
+    return make_negotiation_agent(agent_config)
 
 
 async def _writer(websocket: WebSocket, queue: "asyncio.Queue[ServerEvent]") -> None:
@@ -48,18 +61,7 @@ async def _run_match(
 ) -> None:
     try:
         env = get_environment(environment)
-        agents = [
-            ScriptedNegotiationAgent(
-                EnvAgentConfig(
-                    id=cfg.id,
-                    label=cfg.label,
-                    model=cfg.model,
-                    strategy_prompt=cfg.strategy_prompt,
-                    temperature=cfg.temperature,
-                )
-            )
-            for cfg in agent_configs
-        ]
+        agents = [_make_agent(cfg) for cfg in agent_configs]
         orchestrator = MatchOrchestrator(environment=env, agents=agents)
         with Session(engine) as session:
             async for event in orchestrator.run(match_id, session=session):

@@ -1,4 +1,4 @@
-"""Match orchestrator (Phase 1).
+"""Match orchestrator (Phase 1 loop, Phase 2 live streaming).
 
 Runs a single match: reset env -> loop turns -> for the active agent,
 observe -> agent.act -> validate action -> env.step -> emit events ->
@@ -9,10 +9,16 @@ serializes them onto the socket.
 Malformed or illegal actions (bad JSON shape, or legal-shape-but-illegal-in-
 context like accepting a nonexistent offer) get one retry against the same
 observation, then forfeit the turn — the match continues, never crashes.
+
+`_act_with_retry` runs `agent.act()` as a background task and bridges its
+`on_chunk` callback through a queue, so `reasoning_delta` events reach the
+caller live, while the model is still generating — not replayed after the
+fact once the whole response (and trailing action) is already known.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -87,13 +93,18 @@ class MatchOrchestrator:
             )
 
             start = time.monotonic()
-            action, new_state, chunks, forfeited, last_error = await self._act_with_retry(
-                agent, observation, state, adapter
-            )
+            turn_outcome: dict = {}
+            async for event in self._act_with_retry(
+                match_id, turn_no, agent, observation, state, adapter, turn_outcome
+            ):
+                yield event
             latency_ms = int((time.monotonic() - start) * 1000)
 
-            for chunk in chunks:
-                yield ReasoningDelta(match_id=match_id, agent_id=agent.id, turn_no=turn_no, chunk=chunk)
+            action = turn_outcome["action"]
+            new_state = turn_outcome["state"]
+            chunks = turn_outcome["chunks"]
+            forfeited = turn_outcome["forfeited"]
+            last_error = turn_outcome["error"]
 
             if forfeited:
                 yield ErrorEvent(
@@ -153,28 +164,60 @@ class MatchOrchestrator:
 
     async def _act_with_retry(
         self,
+        match_id: str,
+        turn_no: int,
         agent: Agent,
         observation: dict,
         state: dict,
         adapter: TypeAdapter,
-    ) -> tuple[Action, dict, list[str], bool, str | None]:
+        turn_outcome: dict,
+    ) -> AsyncIterator[ServerEvent]:
         """Try to get a legal action from `agent`, retrying once on a bad
-        shape or an illegal-in-context move (env.step raising ValueError).
-        Returns (action, new_state, reasoning_chunks, forfeited, last_error).
-        On forfeit, `action` is a synthetic marker and `new_state` is the
-        unchanged input state — the turn is skipped, the match continues.
+        shape or an illegal-in-context move (env.step raising ValueError,
+        including a malformed `agent.act()` response). Yields `reasoning_delta`
+        events live, as `agent.act()` produces them via `on_chunk`, rather than
+        buffering the full response first. Writes the result into
+        `turn_outcome`: `action`, `state`, `chunks`, `forfeited`, `error`. On forfeit, `action`
+        is a synthetic marker and `state` is the unchanged input state — the
+        turn is skipped, the match continues.
         """
         last_error: str | None = None
-        all_chunks: list[str] = []
         obs = observation
+        chunks: list[str] = []
 
         for attempt in range(MAX_ACT_ATTEMPTS):
             if attempt > 0:
                 obs = {**observation, "retry_hint": last_error}
-            reasoning_stream, raw_action = await agent.act(obs)
-            async for chunk in reasoning_stream:
-                all_chunks.append(chunk)
+
+            queue: asyncio.Queue[str] = asyncio.Queue()
+
+            async def on_chunk(text: str) -> None:
+                chunks.append(text)
+                await queue.put(text)
+
+            act_task = asyncio.create_task(agent.act(obs, on_chunk=on_chunk))
             try:
+                while not act_task.done():
+                    try:
+                        chunk = await asyncio.wait_for(queue.get(), timeout=0.05)
+                    except asyncio.TimeoutError:
+                        continue
+                    yield ReasoningDelta(
+                        match_id=match_id, agent_id=agent.id, turn_no=turn_no, chunk=chunk
+                    )
+                while not queue.empty():
+                    yield ReasoningDelta(
+                        match_id=match_id,
+                        agent_id=agent.id,
+                        turn_no=turn_no,
+                        chunk=queue.get_nowait(),
+                    )
+            except BaseException:
+                act_task.cancel()
+                raise
+
+            try:
+                raw_action = act_task.result()
                 validated = adapter.validate_python(raw_action)
                 candidate: Action = (
                     validated.model_dump() if hasattr(validated, "model_dump") else validated
@@ -183,6 +226,12 @@ class MatchOrchestrator:
             except (ValidationError, ValueError) as exc:
                 last_error = str(exc)
                 continue
-            return candidate, step_result.state, all_chunks, False, None
 
-        return {"type": "forfeit"}, state, all_chunks, True, last_error
+            turn_outcome.update(
+                action=candidate, state=step_result.state, chunks=chunks, forfeited=False, error=None
+            )
+            return
+
+        turn_outcome.update(
+            action={"type": "forfeit"}, state=state, chunks=chunks, forfeited=True, error=last_error
+        )

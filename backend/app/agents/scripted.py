@@ -9,7 +9,7 @@ seed, so orchestrator tests are reproducible.
 from __future__ import annotations
 
 import random
-from collections.abc import AsyncIterator
+from collections.abc import Awaitable, Callable
 
 from app.contract.interfaces import Action, Agent, AgentConfig, Observation
 
@@ -21,9 +21,17 @@ class ScriptedNegotiationAgent(Agent):
         super().__init__(config)
         self._rng = random.Random(seed)
 
-    async def act(self, observation: Observation) -> tuple[AsyncIterator[str], Action]:
+    async def act(
+        self,
+        observation: Observation,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Action:
         action = self._decide(observation)
-        return self._stream_reasoning(action), action
+        if on_chunk is not None:
+            label = self.config.label
+            await on_chunk(f"[{label}] weighing the current offer against my valuations... ")
+            await on_chunk(f"[{label}] decided: {action['type']}")
+        return action
 
     def _decide(self, observation: Observation) -> Action:
         items: dict[str, int] = observation["items"]

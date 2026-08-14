@@ -9,8 +9,9 @@ environment or agent never touches orchestration code.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 
 @dataclass
@@ -82,10 +83,17 @@ class Agent(ABC):
         return self.config.id
 
     @abstractmethod
-    async def act(self, observation: Observation) -> tuple[AsyncIterator[str], Action]:
-        """Stream reasoning chunks, then return the validated structured action.
+    async def act(
+        self,
+        observation: Observation,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Action:
+        """Produce a structured action for `observation`.
 
-        Implementations stream reasoning as it's produced and only return once
-        the trailing structured action has been parsed and validated against
-        the environment's action schema.
+        Implementations that stream reasoning (e.g. an LLM) call `on_chunk`
+        with each piece of reasoning text as it's produced, so the caller can
+        forward it live rather than waiting for the full response. `on_chunk`
+        is optional — the orchestrator always passes one, but implementations
+        that don't stream (e.g. a scripted agent) may still call it with their
+        full canned reasoning, or not at all.
         """

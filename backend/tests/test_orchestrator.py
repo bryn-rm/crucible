@@ -1,4 +1,5 @@
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import Awaitable, Callable
 
 import pytest
 from sqlalchemy.pool import StaticPool
@@ -28,11 +29,49 @@ def make_agents(seed_a: int = 1, seed_b: int = 2) -> list[Agent]:
 class BrokenAgent(Agent):
     """Always returns a schema-invalid action, to exercise retry/forfeit."""
 
-    async def act(self, observation: Observation) -> tuple[AsyncIterator[str], Action]:
-        return self._stream(), {"type": "not_a_real_action"}
+    async def act(
+        self,
+        observation: Observation,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Action:
+        if on_chunk is not None:
+            await on_chunk("I have no idea what I'm doing")
+        return {"type": "not_a_real_action"}
 
-    async def _stream(self) -> AsyncIterator[str]:
-        yield "I have no idea what I'm doing"
+
+class SlowAgent(Agent):
+    """Blocks until cancelled, to exercise the cancel-in-flight-act path."""
+
+    async def act(
+        self,
+        observation: Observation,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Action:
+        if on_chunk is not None:
+            await on_chunk("thinking forever...")
+        await asyncio.sleep(3600)
+        raise AssertionError("should have been cancelled before waking up")
+
+
+class RetryAgent(Agent):
+    """Returns an invalid action once, then a valid action with distinct reasoning."""
+
+    def __init__(self, config: AgentConfig) -> None:
+        super().__init__(config)
+        self.attempts = 0
+
+    async def act(
+        self,
+        observation: Observation,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Action:
+        self.attempts += 1
+        reasoning = f"attempt {self.attempts};"
+        if on_chunk is not None:
+            await on_chunk(reasoning)
+        if self.attempts == 1:
+            return {"type": "not_a_real_action"}
+        return {"type": "offer", "split": {item: 0 for item in observation["items"]}}
 
 
 def in_memory_session() -> Session:
@@ -95,3 +134,41 @@ async def test_malformed_action_forfeits_and_match_still_completes():
     forfeits = [e for e in events if e.type == "error" and "forfeited" in e.message]
     assert forfeits, "expected at least one forfeited-turn error event"
     assert events[-1].type == "match_ended"
+
+
+@pytest.mark.asyncio
+async def test_persists_reasoning_from_all_retry_attempts():
+    env = NegotiationEnvironment(seed=3, max_turns=1)
+    retry_agent = RetryAgent(
+        AgentConfig(id="agent_a", label="Retry", model="scripted", strategy_prompt="x")
+    )
+    orchestrator = MatchOrchestrator(environment=env, agents=[retry_agent, make_agents()[1]])
+
+    with in_memory_session() as session:
+        events = [event async for event in orchestrator.run("match-retry", session=session)]
+
+        turn = session.exec(select(Turn).where(Turn.match_id == "match-retry")).one()
+        streamed = "".join(event.chunk for event in events if event.type == "reasoning_delta")
+        assert turn.reasoning_text == "attempt 1;attempt 2;"
+        assert turn.reasoning_text == streamed
+
+
+@pytest.mark.asyncio
+async def test_cancelling_the_match_cancels_an_in_flight_act():
+    env = NegotiationEnvironment(seed=1, max_turns=10)
+    slow_agent = SlowAgent(
+        AgentConfig(id="agent_a", label="Slow", model="scripted", strategy_prompt="x")
+    )
+    agents = [slow_agent, make_agents()[1]]
+    orchestrator = MatchOrchestrator(environment=env, agents=agents)
+
+    async def drain() -> None:
+        async for _ in orchestrator.run("match-4"):
+            pass
+
+    task = asyncio.create_task(drain())
+    await asyncio.sleep(0.2)  # let it reach the blocked agent.act() call
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=1)
