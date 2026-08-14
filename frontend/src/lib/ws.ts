@@ -13,18 +13,27 @@ import type { ClientEvent, ServerEvent } from '../contract/events';
 export interface MatchSocket {
   send(event: ClientEvent): void;
   onEvent(handler: (event: ServerEvent) => void): () => void;
+  onOpen(handler: () => void): () => void;
+  onClose(handler: () => void): () => void;
+  onError(handler: () => void): () => void;
   close(): void;
 }
 
 export class LiveMatchSocket implements MatchSocket {
   private ws: WebSocket;
   private handlers = new Set<(event: ServerEvent) => void>();
+  private openHandlers = new Set<() => void>();
+  private closeHandlers = new Set<() => void>();
+  private errorHandlers = new Set<() => void>();
 
   constructor(
     url: string = import.meta.env.VITE_WS_URL ??
       `${location.origin.replace(/^http/, 'ws')}/ws/match`,
   ) {
     this.ws = new WebSocket(url);
+    this.ws.onopen = () => this.openHandlers.forEach((handler) => handler());
+    this.ws.onclose = () => this.closeHandlers.forEach((handler) => handler());
+    this.ws.onerror = () => this.errorHandlers.forEach((handler) => handler());
     this.ws.onmessage = (msg) => {
       const event = JSON.parse(msg.data) as ServerEvent;
       this.handlers.forEach((h) => h(event));
@@ -38,6 +47,22 @@ export class LiveMatchSocket implements MatchSocket {
   onEvent(handler: (event: ServerEvent) => void): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  onOpen(handler: () => void): () => void {
+    this.openHandlers.add(handler);
+    if (this.ws.readyState === WebSocket.OPEN) queueMicrotask(handler);
+    return () => this.openHandlers.delete(handler);
+  }
+
+  onClose(handler: () => void): () => void {
+    this.closeHandlers.add(handler);
+    return () => this.closeHandlers.delete(handler);
+  }
+
+  onError(handler: () => void): () => void {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
   }
 
   close(): void {
@@ -71,6 +96,19 @@ export class MockMatchSocket implements MatchSocket {
   onEvent(handler: (event: ServerEvent) => void): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  onOpen(handler: () => void): () => void {
+    queueMicrotask(handler);
+    return () => undefined;
+  }
+
+  onClose(_handler: () => void): () => void {
+    return () => undefined;
+  }
+
+  onError(_handler: () => void): () => void {
+    return () => undefined;
   }
 
   close(): void {

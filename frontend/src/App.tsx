@@ -15,9 +15,9 @@ function App() {
   const [tab, setTab] = useState<Tab>('match');
 
   return (
-    <div className="mx-auto min-h-screen max-w-5xl bg-neutral-950 px-6 py-8 text-neutral-100">
+    <div className="mx-auto min-h-screen max-w-6xl px-6 py-8 text-neutral-100">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-medium">Multi-Agent Arena</h1>
+        <h1 className="text-xl font-medium tracking-tight">CRUCIBLE <span className="text-xs text-emerald-300">/ ARENA</span></h1>
         <nav className="flex gap-2">
           {TABS.map((t) => (
             <button

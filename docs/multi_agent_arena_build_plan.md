@@ -1,5 +1,23 @@
 # Multi-Agent Arena — Build Plan
 
+## Build status
+
+- **Phase 0 — Complete.** The mirrored Python/TypeScript event and action contracts, pluggable
+  environment/agent interfaces, and SQLModel persistence models are in place.
+- **Phase 0.5 — Complete.** Railway/Vercel deployment configuration, health and WebSocket routes,
+  environment-driven URLs, CORS, and persistent SQLite path configuration are established.
+- **Phase 1 — Complete.** The negotiation environment, deterministic scripted agents, resilient
+  orchestrator loop, public-state redaction, scoring, and full trajectory persistence are covered by
+  backend tests.
+- **Phase 2 — Complete.** Claude and OpenAI negotiation agents stream model output through the
+  single-writer WebSocket path, use shared structured-action parsing, retry invalid actions, select
+  providers by model/configuration, and support cancellation and recoverable errors.
+- **Phase 3 — Complete.** The responsive frontend now includes agent/model/strategy setup, live
+  connection and match controls, streaming reasoning panels, latest actions, negotiation state and
+  offer history, running scores, and explicit error/terminal states.
+- **Phases 4–5 — Not started.** History/replay APIs, judge scoring, aggregation/leaderboards,
+  role-play, tournaments, and final demo polish remain.
+
 A live arena where LLM agents compete on a task in real time, streamed to a browser so you *watch*
 them reason, act, and react — with a trajectory-scoring layer underneath that turns each match into
 measurable data. The visible product is the live match; the quiet differentiator is the
