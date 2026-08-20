@@ -7,7 +7,8 @@
 import { useEffect, useState } from 'react';
 import type { MatchDetail, MatchSummary } from '../api/types';
 import { getMatch, listMatches, runJudge } from '../lib/api';
-import { actionLabel, MatchState } from '../match/MatchView';
+import { actionLabel } from '../match/actionLabel';
+import { MatchState } from '../match/MatchState';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString();

@@ -25,6 +25,9 @@ label { position: relative; display: grid; gap: .4rem; color: #98a09b; font-size
 input, textarea, select { width: 100%; border: 1px solid #303733; border-radius: .4rem; outline: none; background: #0c0f0e; color: #f2f4ef; padding: .7rem .8rem; text-transform: none; letter-spacing: 0; resize: vertical; }
 input:focus, textarea:focus, select:focus { border-color: #65ae88; }
 .start-button { grid-column: 1 / -1; border: 0; border-radius: .55rem; background: #dff7e8; color: #102018; padding: .9rem 1rem; font-weight: 800; }
+.tournament-settings { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tournament-settings .empty-copy { grid-column: 1 / -1; }
+.tournament-note { margin-top: 1rem; }
 
 .match-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-radius: .65rem; }
 .match-toolbar strong { display: block; margin-top: .2rem; }
@@ -75,6 +78,7 @@ input:focus, textarea:focus, select:focus { border-color: #65ae88; }
   .hero-card { align-items: start; flex-direction: column; padding: 1.4rem; }
   .setup-grid, .agent-grid { grid-template-columns: 1fr; }
   .start-button { grid-column: auto; }
+  .tournament-settings { grid-column: auto; grid-template-columns: 1fr; }
   .history-row { grid-template-columns: 4rem 1fr; }
   .history-row span:last-child { grid-column: 1 / -1; }
   .replay-layout { grid-template-columns: 1fr; }

@@ -6,15 +6,22 @@ A live arena where LLM agents compete on a task in real time, streamed to the br
 
 The visible product is the live match. The quiet differentiator is the instrumentation: which strategy, prompt, or model actually wins, and why.
 
-Status: Phases 0–4 complete; Phase 5 is in progress. Interview role-play is implemented; tournament
-mode and demo polish remain. See
+Status: all Phase 5 repository work is complete. Publishing the live URL and recording the demo
+remain deployment-owner steps. See
 `docs/multi_agent_arena_build_plan.md` for the full plan and phase breakdown.
+
+## Demo
+
+- **Live app:** `https://<your-vercel-domain>` (add after following [`DEPLOYMENT.md`](DEPLOYMENT.md))
+- **60-second recording:** follow [`docs/DEMO.md`](docs/DEMO.md), then add the published recording here
+- **Results:** [`docs/RESULTS.md`](docs/RESULTS.md) documents the reproducible scripted baseline and the controlled LLM experiment protocol
 
 What it does
 Runs a match: two (or more) agents act turn-by-turn inside a pluggable environment.
 Streams reasoning live — each agent's thinking fills in token-by-token as it decides, then its action lands and the environment updates.
 Scores every match two ways: objective payoffs where the environment has them, and a rubric-based LLM judge for open-ended scenarios that don't.
 Persists full trajectories so matches can be replayed, and aggregated into win-rates by strategy and model.
+Runs repeated negotiation tournaments with bounded concurrency, fixed seeds, and alternating seats.
 Environments
 Environment	Type	Scoring
 Negotiation (flagship)	Multi-issue bargaining, two agents split a pool with private valuations	Objective payoffs

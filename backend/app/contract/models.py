@@ -7,7 +7,7 @@ for the spec these mirror.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 from sqlmodel import JSON, Column, Field, SQLModel
@@ -25,7 +25,7 @@ class Match(SQLModel, table=True):
     id: str = Field(default_factory=_uuid, primary_key=True)
     environment: str
     status: str = Field(default="pending")  # pending | running | completed | error | cancelled
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     ended_at: Optional[datetime] = None
     outcome: Optional[str] = None
     reason: Optional[str] = None  # agreement | completed | round_limit | error | cancelled
@@ -55,7 +55,7 @@ class Turn(SQLModel, table=True):
     action_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     state_after_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     latency_ms: Optional[int] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Score(SQLModel, table=True):

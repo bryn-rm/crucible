@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { MatchView } from './match/MatchView';
 import { ReplayView } from './replay/ReplayView';
 import { LeaderboardView } from './leaderboard/LeaderboardView';
+import { TournamentView } from './tournament/TournamentView';
 
-type Tab = 'match' | 'replay' | 'leaderboard';
+type Tab = 'match' | 'tournament' | 'replay' | 'leaderboard';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'match', label: 'Match' },
+  { id: 'tournament', label: 'Tournament' },
   { id: 'replay', label: 'Replay' },
   { id: 'leaderboard', label: 'Leaderboard' },
 ];
@@ -36,6 +38,7 @@ function App() {
       </header>
 
       {tab === 'match' && <MatchView />}
+      {tab === 'tournament' && <TournamentView />}
       {tab === 'replay' && <ReplayView />}
       {tab === 'leaderboard' && <LeaderboardView />}
     </div>

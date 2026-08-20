@@ -10,7 +10,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.contract.events import AgentConfig
 
 
 class MatchAgentOut(BaseModel):
@@ -64,3 +66,30 @@ class LeaderboardEntry(BaseModel):
 class LeaderboardResponse(BaseModel):
     by_model: list[LeaderboardEntry]
     by_strategy: list[LeaderboardEntry]
+
+
+class TournamentRequest(BaseModel):
+    environment: str = "negotiation"
+    agents: list[AgentConfig]
+    matches: int = 10
+    concurrency: int = 2
+    seed: int = 42
+
+
+class TournamentMatchResult(BaseModel):
+    match_id: str
+    status: str
+    outcome: str | None = None
+    reason: str | None = None
+    final_scores: dict[str, float] = Field(default_factory=dict)
+    error: str | None = None
+
+
+class TournamentResponse(BaseModel):
+    tournament_id: str
+    status: str
+    requested: int
+    completed: int
+    failed: int
+    concurrency: int
+    matches: list[TournamentMatchResult]

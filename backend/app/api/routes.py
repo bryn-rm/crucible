@@ -20,13 +20,58 @@ from app.api.schemas import (
     MatchDetail,
     MatchSummary,
     ScoreOut,
+    TournamentRequest,
+    TournamentResponse,
     TurnOut,
 )
 from app.contract.models import Match, MatchAgent, Score, Turn
 from app.db import get_session
 from app.judge import JudgeResult, judge_match
+from app.tournament import get_tournament, start_tournament
 
 router = APIRouter()
+
+
+@router.post("/tournaments", response_model=TournamentResponse)
+async def tournament(request: TournamentRequest) -> TournamentResponse:
+    if len(request.agents) != 2:
+        raise HTTPException(status_code=422, detail="tournaments require exactly two agents")
+    if not 1 <= request.matches <= 50:
+        raise HTTPException(status_code=422, detail="matches must be between 1 and 50")
+    if not 1 <= request.concurrency <= 5:
+        raise HTTPException(status_code=422, detail="concurrency must be between 1 and 5")
+    try:
+        job = start_tournament(
+            request.environment,
+            request.agents,
+            request.matches,
+            request.concurrency,
+            request.seed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _tournament_response(job)
+
+
+@router.get("/tournaments/{tournament_id}", response_model=TournamentResponse)
+async def tournament_status(tournament_id: str) -> TournamentResponse:
+    job = get_tournament(tournament_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="tournament not found")
+    return _tournament_response(job)
+
+
+def _tournament_response(job) -> TournamentResponse:
+    completed = sum(result.status == "completed" for result in job.results)
+    return TournamentResponse(
+        tournament_id=job.id,
+        status=job.status,
+        requested=job.requested,
+        completed=completed,
+        failed=sum(result.status == "error" for result in job.results),
+        concurrency=job.concurrency,
+        matches=job.results,
+    )
 
 
 @router.get("/environments")
@@ -86,20 +131,6 @@ def get_match(match_id: str, session: Session = Depends(get_session)) -> MatchDe
         select(Turn).where(Turn.match_id == match_id).order_by(Turn.turn_no)
     ).all()
 
-    # Role-play observations are persisted server-side and contain the trusted,
-    # role-scoped JD/CV context. Give each agent's first context to the judge so
-    # role fidelity can be assessed without exposing it through public replay.
-    role_contexts: dict[str, dict] | None = None
-    if match.environment == "role_play":
-        role_contexts = {}
-        for turn in turns:
-            if turn.agent_id in role_contexts:
-                continue
-            observation = turn.observation_json or {}
-            role_contexts[turn.agent_id] = {
-                "role": observation.get("role"),
-                "private_context": observation.get("private_context", {}),
-            }
     scores = session.exec(select(Score).where(Score.match_id == match_id)).all()
 
     return MatchDetail(
@@ -212,6 +243,20 @@ async def judge(match_id: str, session: Session = Depends(get_session)) -> Judge
     turns = session.exec(
         select(Turn).where(Turn.match_id == match_id).order_by(Turn.turn_no)
     ).all()
+
+    # Persisted observations contain trusted role-scoped JD/CV context. It is
+    # supplied only to the server-side judge, never to public replay responses.
+    role_contexts: dict[str, dict] | None = None
+    if match.environment == "role_play":
+        role_contexts = {}
+        for turn in turns:
+            if turn.agent_id in role_contexts:
+                continue
+            observation = turn.observation_json or {}
+            role_contexts[turn.agent_id] = {
+                "role": observation.get("role"),
+                "private_context": observation.get("private_context", {}),
+            }
 
     try:
         result = await judge_match(

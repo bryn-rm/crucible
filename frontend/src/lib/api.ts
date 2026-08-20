@@ -6,7 +6,7 @@
  * falling back to same-origin `/api` for local/dev setups that proxy it.
  */
 
-import type { JudgeResult, LeaderboardResponse, MatchDetail, MatchSummary } from '../api/types';
+import type { JudgeResult, LeaderboardResponse, MatchDetail, MatchSummary, TournamentRequest, TournamentResponse } from '../api/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? `${location.origin}/api`;
 
@@ -33,4 +33,16 @@ export function getLeaderboard(): Promise<LeaderboardResponse> {
 
 export function runJudge(matchId: string): Promise<JudgeResult> {
   return apiFetch(`/matches/${matchId}/judge`, { method: 'POST' });
+}
+
+export function runTournament(request: TournamentRequest): Promise<TournamentResponse> {
+  return apiFetch('/tournaments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+}
+
+export function getTournament(tournamentId: string): Promise<TournamentResponse> {
+  return apiFetch(`/tournaments/${tournamentId}`);
 }

@@ -65,3 +65,38 @@ export interface JudgeResult {
   dimensions: string[];
   agents: Record<string, AgentJudgment>;
 }
+
+export interface TournamentAgentConfig {
+  id: string;
+  label: string;
+  model: string;
+  strategy_prompt: string;
+  temperature: number;
+}
+
+export interface TournamentRequest {
+  environment: string;
+  agents: TournamentAgentConfig[];
+  matches: number;
+  concurrency: number;
+  seed: number;
+}
+
+export interface TournamentMatchResult {
+  match_id: string;
+  status: string;
+  outcome: string | null;
+  reason: string | null;
+  final_scores: Record<string, number>;
+  error: string | null;
+}
+
+export interface TournamentResponse {
+  tournament_id: string;
+  status: string;
+  requested: number;
+  completed: number;
+  failed: number;
+  concurrency: number;
+  matches: TournamentMatchResult[];
+}

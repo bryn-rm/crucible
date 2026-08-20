@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import TypeAdapter, ValidationError
 from sqlmodel import Session, select
@@ -158,7 +158,7 @@ class MatchOrchestrator:
                 match.status = "completed"
                 match.outcome = outcome
                 match.reason = reason
-                match.ended_at = datetime.utcnow()
+                match.ended_at = datetime.now(UTC)
                 session.add(match)
             for agent_id, value in final_scores.items():
                 match_agent = session.exec(
