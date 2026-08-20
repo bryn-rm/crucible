@@ -53,10 +53,29 @@ input:focus, textarea:focus { border-color: #65ae88; }
 .history-row { display: grid; grid-template-columns: 5rem 6rem 1fr; gap: .75rem; border-bottom: 1px solid #292e2b; padding: .7rem 0; color: #9da59f; font-size: .8rem; }
 .history-row strong { color: #d8dedb; }
 
+.replay-layout { display: grid; grid-template-columns: 18rem 1fr; gap: 1rem; align-items: start; }
+.match-list { display: grid; gap: .6rem; }
+.match-list-item { display: grid; gap: .5rem; border: 1px solid #2a302d; border-radius: .6rem; background: rgba(16, 19, 18, .9); padding: .9rem; text-align: left; color: #d8dedb; }
+.match-list-item.active { border-color: #65ae88; box-shadow: inset 0 0 0 1px #65ae88; }
+.match-list-item strong { text-transform: capitalize; }
+.match-list-agents { display: grid; gap: .15rem; color: #9da59f; font-size: .78rem; }
+.match-status { justify-self: start; border-radius: 99px; padding: .15rem .6rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; background: #202722; color: #aee5c6; }
+.match-status.error, .match-status.cancelled { background: #2d1717; color: #f1b5b5; }
+.replay-detail { display: grid; gap: 1rem; }
+.replay-controls { display: flex; gap: .5rem; }
+.replay-controls button { border: 1px solid #4b5550; border-radius: .4rem; background: transparent; color: #d9dedb; padding: .5rem .75rem; }
+
+.leaderboard-tables { display: grid; gap: 1.5rem; }
+.leaderboard-table { width: 100%; border-collapse: collapse; }
+.leaderboard-table th, .leaderboard-table td { border-bottom: 1px solid #292e2b; padding: .6rem .75rem; text-align: left; font-size: .85rem; color: #d8dedb; }
+.leaderboard-table th { color: #8f9b94; font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.leaderboard-table td:not(:first-child), .leaderboard-table th:not(:first-child) { text-align: right; }
+
 @media (max-width: 700px) {
   .hero-card { align-items: start; flex-direction: column; padding: 1.4rem; }
   .setup-grid, .agent-grid { grid-template-columns: 1fr; }
   .start-button { grid-column: auto; }
   .history-row { grid-template-columns: 4rem 1fr; }
   .history-row span:last-child { grid-column: 1 / -1; }
+  .replay-layout { grid-template-columns: 1fr; }
 }

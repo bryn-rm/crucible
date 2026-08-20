@@ -6,7 +6,8 @@ A live arena where LLM agents compete on a task in real time, streamed to the br
 
 The visible product is the live match. The quiet differentiator is the instrumentation: which strategy, prompt, or model actually wins, and why.
 
-Status: early build. See docs/BUILD_PLAN.md for the full plan and phase breakdown.
+Status: Phases 0–4 complete; role-play, tournaments, and demo polish remain. See
+`docs/multi_agent_arena_build_plan.md` for the full plan and phase breakdown.
 
 What it does
 Runs a match: two (or more) agents act turn-by-turn inside a pluggable environment.
@@ -106,12 +107,12 @@ Backend on Railway, frontend on Vercel — this is a monorepo, so each service's
 Railway (backend)
 - Root directory: `backend`
 - Config: `backend/railway.toml` (start command, healthcheck at `/health`)
-- Env vars: `ANTHROPIC_API_KEY`, `ARENA_DB_PATH` (point at a mounted Railway volume, not the ephemeral filesystem — SQLite data is otherwise lost on every redeploy), `ALLOWED_ORIGINS` (the deployed Vercel URL)
+- Env vars: `ANTHROPIC_API_KEY`, `JUDGE_MODEL`, `ARENA_DB_PATH` (point at a mounted Railway volume, not the ephemeral filesystem — SQLite data is otherwise lost on every redeploy), `ALLOWED_ORIGINS` (the deployed Vercel URL)
 
 Vercel (frontend)
 - Root directory: `frontend`
 - Framework preset: Vite (auto-detected)
-- Env vars: `VITE_WS_URL` (the Railway backend's `wss://` WebSocket URL — Vercel is serverless and can't host the backend's long-lived WebSocket connection itself)
+- Env vars: `VITE_WS_URL` (the Railway backend's `wss://` WebSocket URL — Vercel is serverless and can't host the backend's long-lived WebSocket connection itself), `VITE_API_URL` (the Railway backend's `/api` URL)
 
 Build order (short version)
 Scaffold — both apps boot empty and green; commit the skeleton.
@@ -122,7 +123,8 @@ Frontend, in parallel — live match view against the mock socket, then swap to 
 Instrumentation — replay, rubric judge, aggregate leaderboard (with honest match counts).
 Polish — role-play environment, tournament mode (bounded concurrency), deploy, demo.
 
-Full detail, exit criteria per phase, and the parallel Claude Code / Codex split are in docs/BUILD_PLAN.md.
+Full detail, exit criteria per phase, and the parallel Claude Code / Codex split are in
+`docs/multi_agent_arena_build_plan.md`.
 
 Principles
 Commit at every green state — a working point to fall back to always exists.

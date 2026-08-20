@@ -32,7 +32,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
   },
 ];
 
-function actionLabel(action?: Record<string, unknown>) {
+export function actionLabel(action?: Record<string, unknown>) {
   if (!action) return 'Waiting for an action';
   if (action.type === 'offer') {
     const split = action.split as Record<string, number> | undefined;
@@ -43,7 +43,7 @@ function actionLabel(action?: Record<string, unknown>) {
   return String(action.type ?? 'Unknown action');
 }
 
-function MatchState({ state }: { state: Record<string, unknown> | null }) {
+export function MatchState({ state }: { state: Record<string, unknown> | null }) {
   if (!state) {
     return <p className="empty-copy">The public match state will appear after the match starts.</p>;
   }
