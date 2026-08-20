@@ -28,7 +28,7 @@ class Match(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     ended_at: Optional[datetime] = None
     outcome: Optional[str] = None
-    reason: Optional[str] = None  # agreement | round_limit | error | cancelled
+    reason: Optional[str] = None  # agreement | completed | round_limit | error | cancelled
 
 
 class MatchAgent(SQLModel, table=True):

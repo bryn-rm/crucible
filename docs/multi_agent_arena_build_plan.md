@@ -17,7 +17,9 @@
   offer history, running scores, and explicit error/terminal states.
 - **Phase 4 — Complete.** Persisted match browsing and turn-by-turn replay, separately run and
   persisted rubric judging, and model/strategy leaderboards with match counts are in place.
-- **Phase 5 — Not started.** Role-play, tournaments, and final demo polish remain.
+- **Phase 5 — In progress.** The interviewer/interviewee role-play environment, environment-aware
+  agents, private-context redaction, transcript UI, and role-play judge rubric are complete.
+  Tournament mode and final demo polish remain.
 
 A live arena where LLM agents compete on a task in real time, streamed to a browser so you *watch*
 them reason, act, and react — with a trajectory-scoring layer underneath that turns each match into
@@ -282,6 +284,17 @@ time, the state visualization updates per action, and the final outcome renders.
 match counts, and replay any individual trajectory.
 
 ## Phase 5 — Polish, second environment, deploy
+
+Progress checklist:
+
+- [x] Interviewer/interviewee role-play environment with private JD/CV context.
+- [x] Scripted, Claude, and OpenAI role-play agent paths.
+- [x] Adaptive live transcript UI and environment selector.
+- [x] Role-play judge rubric (separate post-match pass).
+- [x] Railway/Vercel deployment checklist and environment-variable inventory.
+- [ ] Tournament mode with bounded concurrency.
+- [ ] Demo GIF/Loom and live deployment links.
+- [ ] Short aggregate-results write-up.
 
 - **Second environment: role-play (interviewer vs. interviewee)** — the agent-vs-agent open-ended
   scenario specced above, seeded with a JD + CV and scored by the rubric judge. This is the priority

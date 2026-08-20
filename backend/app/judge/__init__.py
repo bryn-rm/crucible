@@ -25,7 +25,12 @@ RUBRICS: dict[str, dict[str, str]] = {
         "toughness": "1 (caved immediately, gave away most value) to 10 (held firm, conceded little).",
         "fairness": "1 (offers were consistently one-sided) to 10 (offers were consistently balanced).",
         "clarity": "1 (reasoning was incoherent or contradictory) to 10 (reasoning was precise and easy to follow).",
-    }
+    },
+    "role_play": {
+        "role_fidelity": "1 (ignored the assigned role) to 10 (consistently embodied the role and used its context).",
+        "communication": "1 (unclear, evasive, or incoherent) to 10 (clear, relevant, and engaging).",
+        "interview_effectiveness": "1 (did not advance a useful interview) to 10 (elicited or supplied strong evidence for the role).",
+    },
 }
 
 
@@ -47,7 +52,11 @@ def rubric_for(environment: str) -> dict[str, str]:
 
 
 def _build_prompt(
-    environment: str, agents: list[dict], turns: list[dict], outcome: str | None
+    environment: str,
+    agents: list[dict],
+    turns: list[dict],
+    outcome: str | None,
+    role_contexts: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[str, str]:
     dims = rubric_for(environment)
     system = (
@@ -66,9 +75,19 @@ def _build_prompt(
         f"  action: {json.dumps(t['action_json'])}"
         for t in turns
     )
+    context_text = ""
+    if role_contexts:
+        context_text = (
+            "\n\nTrusted role context (use this to assess role fidelity; do not infer context "
+            "that is not listed):\n"
+            + "\n".join(
+                f"- {agent_id}: {json.dumps(context, sort_keys=True)}"
+                for agent_id, context in sorted(role_contexts.items())
+            )
+        )
     user = (
         f"Environment: {environment}\nOutcome: {outcome}\n\n"
-        f"Agents:\n{roster}\n\nDimensions:\n{dims_text}\n\nTranscript:\n{transcript}"
+        f"Agents:\n{roster}{context_text}\n\nDimensions:\n{dims_text}\n\nTranscript:\n{transcript}"
     )
     return system, user
 
@@ -85,10 +104,11 @@ async def judge_match(
     agents: list[dict],
     turns: list[dict],
     outcome: str | None,
+    role_contexts: dict[str, dict[str, Any]] | None = None,
     client: anthropic.AsyncAnthropic | None = None,
 ) -> JudgeResult:
     dims = rubric_for(environment)
-    system, user = _build_prompt(environment, agents, turns, outcome)
+    system, user = _build_prompt(environment, agents, turns, outcome, role_contexts)
 
     client = client or anthropic.AsyncAnthropic()
     response = await client.messages.create(

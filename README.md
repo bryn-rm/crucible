@@ -6,7 +6,8 @@ A live arena where LLM agents compete on a task in real time, streamed to the br
 
 The visible product is the live match. The quiet differentiator is the instrumentation: which strategy, prompt, or model actually wins, and why.
 
-Status: Phases 0–4 complete; role-play, tournaments, and demo polish remain. See
+Status: Phases 0–4 complete; Phase 5 is in progress. Interview role-play is implemented; tournament
+mode and demo polish remain. See
 `docs/multi_agent_arena_build_plan.md` for the full plan and phase breakdown.
 
 What it does
@@ -103,6 +104,9 @@ The frontend can run against a mock WebSocket that replays canned events in the 
 Deployment
 
 Backend on Railway, frontend on Vercel — this is a monorepo, so each service's root directory must be set explicitly in that platform's project settings.
+
+Use the step-by-step production checklist in [`DEPLOYMENT.md`](DEPLOYMENT.md), including the volume,
+environment-variable, CORS, security, and post-deploy verification requirements.
 
 Railway (backend)
 - Root directory: `backend`

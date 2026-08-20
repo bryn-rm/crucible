@@ -40,12 +40,35 @@ export function actionLabel(action?: Record<string, unknown>) {
       .map(([item, quantity]) => `${quantity} ${item}`)
       .join(', ')}`;
   }
+  if (action.type === 'say') return String(action.text ?? 'Speaks');
+  if (action.type === 'end_interview') return 'Ends the interview';
   return String(action.type ?? 'Unknown action');
 }
 
 export function MatchState({ state }: { state: Record<string, unknown> | null }) {
   if (!state) {
     return <p className="empty-copy">The public match state will appear after the match starts.</p>;
+  }
+
+  const transcript = state.transcript as Array<{
+    turn_no: number;
+    agent_id: string;
+    role: string;
+    text: string;
+  }> | undefined;
+  if (transcript) {
+    return (
+      <div className="history-list">
+        {transcript.length === 0 && <p className="empty-copy">The interview is about to begin.</p>}
+        {transcript.map((entry) => (
+          <div className="history-row" key={entry.turn_no}>
+            <span>{entry.role}</span>
+            <strong>{entry.agent_id}</strong>
+            <span>{entry.text}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   const items = (state.items ?? {}) as Record<string, number>;
@@ -95,6 +118,7 @@ export function MatchView() {
   const socketRef = useRef<MatchSocket | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [configs, setConfigs] = useState(DEFAULT_AGENTS);
+  const [environment, setEnvironment] = useState<'negotiation' | 'role_play'>('negotiation');
   const [agents, setAgents] = useState<Record<string, AgentView>>({});
   const [matchId, setMatchId] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, unknown> | null>(null);
@@ -148,7 +172,7 @@ export function MatchView() {
             ]),
           ),
         );
-        setStatus('Negotiation in progress');
+        setStatus(event.environment === 'role_play' ? 'Interview in progress' : 'Negotiation in progress');
         break;
       case 'turn_started':
         setAgents((current) =>
@@ -204,7 +228,7 @@ export function MatchView() {
   }
 
   function startMatch() {
-    const event: StartMatch = { type: 'start_match', environment: 'negotiation', agents: configs };
+    const event: StartMatch = { type: 'start_match', environment, agents: configs };
     setAgents({});
     setState(null);
     setScores({});
@@ -227,13 +251,27 @@ export function MatchView() {
         <div>
           <span className="eyebrow">Live experiment</span>
           <h2>Watch strategy become action.</h2>
-          <p>Configure two agents, then follow every offer and concession as it streams.</p>
+          <p>Configure two agents, then follow every decision and response as it streams.</p>
         </div>
         <div className={`connection ${connection}`}><span />{connection}</div>
       </section>
 
       {!running && roster.length === 0 && (
         <section className="setup-grid">
+          <article className="setup-card">
+            <span className="eyebrow">Environment</span>
+            <label>Scenario
+              <select value={environment} onChange={(e) => setEnvironment(e.target.value as 'negotiation' | 'role_play')}>
+                <option value="negotiation">Multi-issue negotiation</option>
+                <option value="role_play">Job interview role-play</option>
+              </select>
+            </label>
+            <p className="empty-copy">
+              {environment === 'role_play'
+                ? 'Agent 1 interviews Agent 2. The completed transcript is scored separately by the rubric judge.'
+                : 'Two agents bargain over a fixed item pool with private valuations.'}
+            </p>
+          </article>
           {configs.map((config, index) => (
             <article className="setup-card" key={config.id}>
               <span className="agent-number">0{index + 1}</span>
@@ -264,7 +302,7 @@ export function MatchView() {
               </article>
             ))}
           </section>
-          <section className="environment-card"><header><div><span className="eyebrow">Public environment</span><h3>Negotiation table</h3></div>{state && <span>{String(state.turns_taken)} / {String(state.max_turns)} turns</span>}</header><MatchState state={state} /></section>
+          <section className="environment-card"><header><div><span className="eyebrow">Public environment</span><h3>{environment === 'role_play' ? 'Interview transcript' : 'Negotiation table'}</h3></div>{state && typeof state.turns_taken === 'number' && typeof state.max_turns === 'number' && <span>{state.turns_taken} / {state.max_turns} turns</span>}</header><MatchState state={state} /></section>
         </>
       )}
     </main>

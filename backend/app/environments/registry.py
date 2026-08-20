@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from app.contract.interfaces import Environment
 from app.environments.negotiation import NegotiationEnvironment
+from app.environments.role_play import InterviewRolePlayEnvironment
 
 ENVIRONMENTS: dict[str, type[Environment]] = {
     "negotiation": NegotiationEnvironment,
+    "role_play": InterviewRolePlayEnvironment,
 }
 
 

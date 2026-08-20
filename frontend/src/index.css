@@ -3,7 +3,7 @@
 :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #090b0b; color: #f2f4ef; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% -10%, #1d3029 0, #090b0b 38rem); }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 
@@ -22,8 +22,8 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .setup-card { position: relative; display: grid; gap: 1rem; padding: 1.5rem; border-radius: .75rem; overflow: hidden; }
 .agent-number { position: absolute; top: -.5rem; right: 1rem; color: #202522; font-family: Georgia, serif; font-size: 5rem; line-height: 1; }
 label { position: relative; display: grid; gap: .4rem; color: #98a09b; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
-input, textarea { width: 100%; border: 1px solid #303733; border-radius: .4rem; outline: none; background: #0c0f0e; color: #f2f4ef; padding: .7rem .8rem; text-transform: none; letter-spacing: 0; resize: vertical; }
-input:focus, textarea:focus { border-color: #65ae88; }
+input, textarea, select { width: 100%; border: 1px solid #303733; border-radius: .4rem; outline: none; background: #0c0f0e; color: #f2f4ef; padding: .7rem .8rem; text-transform: none; letter-spacing: 0; resize: vertical; }
+input:focus, textarea:focus, select:focus { border-color: #65ae88; }
 .start-button { grid-column: 1 / -1; border: 0; border-radius: .55rem; background: #dff7e8; color: #102018; padding: .9rem 1rem; font-weight: 800; }
 
 .match-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-radius: .65rem; }

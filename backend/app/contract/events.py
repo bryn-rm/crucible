@@ -67,6 +67,7 @@ class MatchEndedReason(BaseModel):
     """Enumerated only by convention; kept as str for forward compatibility."""
 
     AGREEMENT: Literal["agreement"] = "agreement"
+    COMPLETED: Literal["completed"] = "completed"
     ROUND_LIMIT: Literal["round_limit"] = "round_limit"
     ERROR: Literal["error"] = "error"
     CANCELLED: Literal["cancelled"] = "cancelled"
@@ -77,7 +78,7 @@ class MatchEnded(BaseModel):
     match_id: str
     outcome: str
     final_scores: dict[str, float]
-    reason: Literal["agreement", "round_limit", "error", "cancelled"]
+    reason: Literal["agreement", "completed", "round_limit", "error", "cancelled"]
 
 
 class ErrorEvent(BaseModel):

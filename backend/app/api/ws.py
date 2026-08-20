@@ -23,7 +23,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 from sqlmodel import Session
 
-from app.agents.registry import make_negotiation_agent
+from app.agents.registry import make_agent
 from app.contract.events import AgentConfig as ClientAgentConfig
 from app.contract.events import ClientEvent, ErrorEvent, ServerEvent
 from app.contract.interfaces import Agent
@@ -36,7 +36,7 @@ router = APIRouter()
 _client_event_adapter: TypeAdapter[ClientEvent] = TypeAdapter(ClientEvent)
 
 
-def _make_agent(cfg: ClientAgentConfig) -> Agent:
+def _make_agent(cfg: ClientAgentConfig, environment: str) -> Agent:
     agent_config = EnvAgentConfig(
         id=cfg.id,
         label=cfg.label,
@@ -44,7 +44,7 @@ def _make_agent(cfg: ClientAgentConfig) -> Agent:
         strategy_prompt=cfg.strategy_prompt,
         temperature=cfg.temperature,
     )
-    return make_negotiation_agent(agent_config)
+    return make_agent(agent_config, environment)
 
 
 async def _writer(websocket: WebSocket, queue: "asyncio.Queue[ServerEvent]") -> None:
@@ -61,7 +61,7 @@ async def _run_match(
 ) -> None:
     try:
         env = get_environment(environment)
-        agents = [_make_agent(cfg) for cfg in agent_configs]
+        agents = [_make_agent(cfg, environment) for cfg in agent_configs]
         orchestrator = MatchOrchestrator(environment=env, agents=agents)
         with Session(engine) as session:
             async for event in orchestrator.run(match_id, session=session):

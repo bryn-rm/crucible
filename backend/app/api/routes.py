@@ -85,6 +85,21 @@ def get_match(match_id: str, session: Session = Depends(get_session)) -> MatchDe
     turns = session.exec(
         select(Turn).where(Turn.match_id == match_id).order_by(Turn.turn_no)
     ).all()
+
+    # Role-play observations are persisted server-side and contain the trusted,
+    # role-scoped JD/CV context. Give each agent's first context to the judge so
+    # role fidelity can be assessed without exposing it through public replay.
+    role_contexts: dict[str, dict] | None = None
+    if match.environment == "role_play":
+        role_contexts = {}
+        for turn in turns:
+            if turn.agent_id in role_contexts:
+                continue
+            observation = turn.observation_json or {}
+            role_contexts[turn.agent_id] = {
+                "role": observation.get("role"),
+                "private_context": observation.get("private_context", {}),
+            }
     scores = session.exec(select(Score).where(Score.match_id == match_id)).all()
 
     return MatchDetail(
@@ -212,6 +227,7 @@ async def judge(match_id: str, session: Session = Depends(get_session)) -> Judge
                 for t in turns
             ],
             outcome=match.outcome,
+            role_contexts=role_contexts,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

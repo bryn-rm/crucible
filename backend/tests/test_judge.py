@@ -50,6 +50,16 @@ JUDGE_JSON = json.dumps(
     }
 )
 
+ROLE_PLAY_JUDGE_JSON = json.dumps(
+    {
+        agent_id: {
+            "scores": {"role_fidelity": 8, "communication": 8, "interview_effectiveness": 8},
+            "rationale": "Used the supplied role context.",
+        }
+        for agent_id in ("agent_a", "agent_b")
+    }
+)
+
 AGENTS = [
     {"agent_id": "agent_a", "label": "Alice", "model": "claude-haiku-4-5", "strategy": "aggressive"},
     {"agent_id": "agent_b", "label": "Bob", "model": "claude-haiku-4-5", "strategy": "cautious"},
@@ -87,7 +97,40 @@ async def test_judge_match_raises_for_unknown_environment():
     client = _FakeClient(JUDGE_JSON)
 
     with pytest.raises(ValueError):
-        await judge_match("role_play", AGENTS, TURNS, outcome=None, client=client)
+        await judge_match("unknown", AGENTS, TURNS, outcome=None, client=client)
+
+
+def test_role_play_rubric_is_registered():
+    from app.judge import rubric_for
+
+    assert set(rubric_for("role_play")) == {
+        "role_fidelity",
+        "communication",
+        "interview_effectiveness",
+    }
+
+
+@pytest.mark.asyncio
+async def test_role_play_judge_prompt_includes_trusted_role_context():
+    client = _FakeClient(ROLE_PLAY_JUDGE_JSON)
+    contexts = {
+        "agent_a": {"role": "interviewer", "private_context": {"job_description": "SECRET JD"}},
+        "agent_b": {"role": "candidate", "private_context": {"cv": "SECRET CV"}},
+    }
+
+    await judge_match(
+        "role_play",
+        AGENTS,
+        TURNS,
+        outcome="Interview completed",
+        role_contexts=contexts,
+        client=client,
+    )
+
+    prompt = client.calls[0]["messages"][0]["content"]
+    assert "Trusted role context" in prompt
+    assert "SECRET JD" in prompt
+    assert "SECRET CV" in prompt
 
 
 @pytest.mark.asyncio

@@ -133,10 +133,19 @@ class MatchOrchestrator:
                 session.commit()
 
         final_scores = self.environment.score(state)
-        # The contract's MatchEndedReason has no "walked" bucket; both a
-        # walkaway and hitting the turn cap are "no agreement" outcomes.
-        reason = "agreement" if state.get("status") == "agreement" else "round_limit"
-        outcome = ", ".join(f"{agent_id}={value:g}" for agent_id, value in final_scores.items())
+        status = state.get("status")
+        if status == "agreement":
+            reason = "agreement"
+        elif status == "completed":
+            reason = "completed"
+        else:
+            # Negotiation walkaways and exhausted turns are both no-agreement outcomes.
+            reason = "round_limit"
+        outcome = (
+            ", ".join(f"{agent_id}={value:g}" for agent_id, value in final_scores.items())
+            if final_scores
+            else "Interview completed" if reason == "completed" else "Awaiting judge scores"
+        )
 
         yield ScoreUpdate(match_id=match_id, scores=final_scores)
         yield MatchEnded(match_id=match_id, outcome=outcome, final_scores=final_scores, reason=reason)

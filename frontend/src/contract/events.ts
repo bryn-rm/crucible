@@ -56,7 +56,7 @@ export interface ScoreUpdate {
   scores: Record<string, number>;
 }
 
-export type MatchEndedReason = 'agreement' | 'round_limit' | 'error' | 'cancelled';
+export type MatchEndedReason = 'agreement' | 'completed' | 'round_limit' | 'error' | 'cancelled';
 
 export interface MatchEnded {
   type: 'match_ended';
