@@ -6,10 +6,10 @@ from sqlmodel import Session, select
 
 from app.contract.events import AgentConfig
 from app.api.routes import tournament
-from app.api.schemas import TournamentRequest
+from app.api.schemas import TournamentMatchResult, TournamentRequest
 from app.contract.models import Match
 from app.db import engine
-from app.tournament import bounded_map, get_tournament, run_tournament, start_tournament
+from app.tournament import _tasks, bounded_map, get_tournament, run_tournament, start_tournament
 
 
 @pytest.mark.asyncio
@@ -80,3 +80,49 @@ async def test_background_tournament_returns_handle_and_completes():
     assert current is not None
     assert current.status == "completed"
     assert len(current.results) == 2
+    await asyncio.sleep(0)
+    assert not _tasks
+
+
+@pytest.mark.asyncio
+async def test_background_tournament_reports_progress(monkeypatch):
+    agents = [
+        AgentConfig(id="a", label="A", model="scripted", strategy_prompt="a"),
+        AgentConfig(id="b", label="B", model="scripted", strategy_prompt="b"),
+    ]
+    release = asyncio.Event()
+
+    async def fake_run(*args, on_result, **kwargs):
+        result = TournamentMatchResult(match_id="first", status="completed")
+        on_result(result)
+        await release.wait()
+        return [result]
+
+    monkeypatch.setattr("app.tournament.run_tournament", fake_run)
+    job = start_tournament("negotiation", agents, matches=1, concurrency=1, seed=9)
+    await asyncio.sleep(0)
+
+    assert job.status == "running"
+    assert [result.match_id for result in job.results] == ["first"]
+
+    release.set()
+    await asyncio.gather(*_tasks)
+    assert job.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_background_tournament_marks_unexpected_failure_as_error(monkeypatch):
+    agents = [
+        AgentConfig(id="a", label="A", model="scripted", strategy_prompt="a"),
+        AgentConfig(id="b", label="B", model="scripted", strategy_prompt="b"),
+    ]
+
+    async def fake_run(*args, **kwargs):
+        raise RuntimeError("batch exploded")
+
+    monkeypatch.setattr("app.tournament.run_tournament", fake_run)
+    job = start_tournament("negotiation", agents, matches=1, concurrency=1, seed=9)
+    await asyncio.gather(*_tasks)
+
+    assert job.status == "error"
+    assert not _tasks

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -34,6 +35,8 @@ class TournamentJob:
 
 
 _jobs: dict[str, TournamentJob] = {}
+_tasks: set[asyncio.Task[None]] = set()
+logger = logging.getLogger(__name__)
 
 
 async def bounded_map(
@@ -65,6 +68,7 @@ async def run_tournament(
     matches: int,
     concurrency: int,
     seed: int = 42,
+    on_result: Callable[[TournamentMatchResult], None] | None = None,
 ) -> list[TournamentMatchResult]:
     """Run and persist independent matches, returning a compact batch summary."""
 
@@ -88,13 +92,16 @@ async def run_tournament(
                         ended = event
             if ended is None:
                 raise RuntimeError("match ended without a terminal event")
-            return TournamentMatchResult(
+            result = TournamentMatchResult(
                 match_id=match_id,
                 status="completed",
                 outcome=ended.outcome,
                 reason=ended.reason,
                 final_scores=ended.final_scores,
             )
+            if on_result is not None:
+                on_result(result)
+            return result
         except Exception as exc:  # one failed model call must not abort the whole batch
             with Session(engine) as session:
                 persisted = session.get(Match, match_id)
@@ -105,7 +112,10 @@ async def run_tournament(
                     persisted.ended_at = datetime.now(UTC)
                     session.add(persisted)
                     session.commit()
-            return TournamentMatchResult(match_id=match_id, status="error", error=str(exc))
+            result = TournamentMatchResult(match_id=match_id, status="error", error=str(exc))
+            if on_result is not None:
+                on_result(result)
+            return result
 
     return await bounded_map(matches, concurrency, run_match)
 
@@ -122,10 +132,23 @@ def start_tournament(
     _jobs[job.id] = job
 
     async def execute() -> None:
-        job.results = await run_tournament(environment, agent_configs, matches, concurrency, seed)
-        job.status = "completed"
+        try:
+            await run_tournament(
+                environment,
+                agent_configs,
+                matches,
+                concurrency,
+                seed,
+                on_result=job.results.append,
+            )
+            job.status = "completed"
+        except Exception:  # protect the background job state from unexpected failures
+            job.status = "error"
+            logger.exception("Tournament job %s failed", job.id)
 
-    asyncio.create_task(execute())
+    task = asyncio.create_task(execute())
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
     return job
 
 

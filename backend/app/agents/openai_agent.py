@@ -17,12 +17,17 @@ from app.agents.llm_negotiation import LLMNegotiationAgent
 from app.contract.interfaces import AgentConfig
 
 MAX_COMPLETION_TOKENS = 1024
+PROVIDER_TIMEOUT_SECONDS = 60.0
+PROVIDER_MAX_RETRIES = 2
 
 
 class OpenAINegotiationAgent(LLMNegotiationAgent):
     def __init__(self, config: AgentConfig, client: openai.AsyncOpenAI | None = None) -> None:
         super().__init__(config)
-        self._client = client or openai.AsyncOpenAI()
+        self._client = client or openai.AsyncOpenAI(
+            timeout=PROVIDER_TIMEOUT_SECONDS,
+            max_retries=PROVIDER_MAX_RETRIES,
+        )
 
     async def _stream_reasoning(
         self,

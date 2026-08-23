@@ -41,3 +41,6 @@ npm-debug.log*
 # Logs
 *.log
 
+
+# Code review scratch (local only)
+CODE_REVIEW.md

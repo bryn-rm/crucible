@@ -227,6 +227,11 @@ class MatchOrchestrator:
 
             try:
                 raw_action = act_task.result()
+            except Exception as exc:  # provider/API failures are retryable turn failures
+                last_error = f"provider unavailable ({type(exc).__name__}): {exc}"
+                continue
+
+            try:
                 validated = adapter.validate_python(raw_action)
                 candidate: Action = (
                     validated.model_dump() if hasattr(validated, "model_dump") else validated

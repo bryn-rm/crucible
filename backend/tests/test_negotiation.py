@@ -94,6 +94,22 @@ def test_accept_computes_allocations_and_scores():
     assert set(scores) == set(AGENTS)
 
 
+def test_partial_offer_is_normalized_and_scores_without_error():
+    env = make_env()
+    state = env.reset(AGENTS)
+    offered = env.step(
+        state, "agent_a", {"type": "offer", "split": {"books": 1}}
+    ).state
+
+    assert offered["standing_offer"]["split"] == {"books": 1, "hats": 0, "balls": 0}
+
+    accepted = env.step(offered, "agent_b", {"type": "accept"}).state
+    scores = env.score(accepted)
+
+    assert accepted["allocations"]["agent_a"] == {"books": 1, "hats": 0, "balls": 0}
+    assert set(scores) == set(AGENTS)
+
+
 def test_walk_ends_match_with_zero_scores():
     env = make_env()
     state = env.reset(AGENTS)

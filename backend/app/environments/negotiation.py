@@ -93,7 +93,10 @@ class NegotiationEnvironment(Environment):
                     raise ValueError(f"offer references unknown item {item!r}")
                 if not (0 <= qty <= items[item]):
                     raise ValueError(f"offer for {item!r} out of range 0..{items[item]}")
-            new_state["standing_offer"] = {"agent_id": agent_id, "split": dict(split)}
+            # Missing items mean the offerer requests zero of that item. Store a
+            # complete split so accepted allocations are always safe to score.
+            normalized_split = {item: split.get(item, 0) for item in items}
+            new_state["standing_offer"] = {"agent_id": agent_id, "split": normalized_split}
 
         elif atype == "accept":
             offer = new_state["standing_offer"]

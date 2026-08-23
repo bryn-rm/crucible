@@ -15,12 +15,17 @@ from app.agents.llm_negotiation import LLMNegotiationAgent
 from app.contract.interfaces import AgentConfig
 
 MAX_TOKENS = 1024
+PROVIDER_TIMEOUT_SECONDS = 60.0
+PROVIDER_MAX_RETRIES = 2
 
 
 class ClaudeNegotiationAgent(LLMNegotiationAgent):
     def __init__(self, config: AgentConfig, client: anthropic.AsyncAnthropic | None = None) -> None:
         super().__init__(config)
-        self._client = client or anthropic.AsyncAnthropic()
+        self._client = client or anthropic.AsyncAnthropic(
+            timeout=PROVIDER_TIMEOUT_SECONDS,
+            max_retries=PROVIDER_MAX_RETRIES,
+        )
 
     async def _stream_reasoning(
         self,

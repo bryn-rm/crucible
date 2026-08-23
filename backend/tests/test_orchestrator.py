@@ -74,6 +74,22 @@ class RetryAgent(Agent):
         return {"type": "offer", "split": {item: 0 for item in observation["items"]}}
 
 
+class ProviderFailureAgent(Agent):
+    """Raises like an unavailable provider, to exercise retry/forfeit."""
+
+    def __init__(self, config: AgentConfig) -> None:
+        super().__init__(config)
+        self.attempts = 0
+
+    async def act(
+        self,
+        observation: Observation,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Action:
+        self.attempts += 1
+        raise ConnectionError("provider connection failed")
+
+
 def in_memory_session() -> Session:
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
@@ -133,6 +149,22 @@ async def test_malformed_action_forfeits_and_match_still_completes():
 
     forfeits = [e for e in events if e.type == "error" and "forfeited" in e.message]
     assert forfeits, "expected at least one forfeited-turn error event"
+    assert events[-1].type == "match_ended"
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_retries_then_forfeits_and_match_completes():
+    env = NegotiationEnvironment(seed=3, max_turns=1)
+    failing_agent = ProviderFailureAgent(
+        AgentConfig(id="agent_a", label="Unavailable", model="provider", strategy_prompt="x")
+    )
+    orchestrator = MatchOrchestrator(environment=env, agents=[failing_agent, make_agents()[1]])
+
+    events = [event async for event in orchestrator.run("match-provider-failure")]
+
+    assert failing_agent.attempts == 2
+    error = next(event for event in events if event.type == "error")
+    assert "provider unavailable (ConnectionError)" in error.message
     assert events[-1].type == "match_ended"
 
 
