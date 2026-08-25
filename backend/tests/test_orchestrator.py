@@ -169,7 +169,7 @@ async def test_provider_failure_retries_then_forfeits_and_match_completes():
 
 
 @pytest.mark.asyncio
-async def test_persists_reasoning_from_all_retry_attempts():
+async def test_persists_reasoning_only_from_accepted_retry_attempt():
     env = NegotiationEnvironment(seed=3, max_turns=1)
     retry_agent = RetryAgent(
         AgentConfig(id="agent_a", label="Retry", model="scripted", strategy_prompt="x")
@@ -181,8 +181,8 @@ async def test_persists_reasoning_from_all_retry_attempts():
 
         turn = session.exec(select(Turn).where(Turn.match_id == "match-retry")).one()
         streamed = "".join(event.chunk for event in events if event.type == "reasoning_delta")
-        assert turn.reasoning_text == "attempt 1;attempt 2;"
-        assert turn.reasoning_text == streamed
+        assert turn.reasoning_text == "attempt 2;"
+        assert streamed == "attempt 1;attempt 2;"
 
 
 @pytest.mark.asyncio

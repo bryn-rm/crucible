@@ -27,19 +27,19 @@ def test_gpt_model_with_key_set_picks_openai_agent(monkeypatch):
     assert isinstance(agent, OpenAINegotiationAgent)
 
 
-def test_known_provider_without_api_key_falls_back_to_scripted(monkeypatch):
+def test_known_provider_without_api_key_is_rejected(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    agent = make_negotiation_agent(config("claude-haiku-4-5"))
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        make_negotiation_agent(config("claude-haiku-4-5"))
 
-    assert isinstance(agent, ScriptedNegotiationAgent)
 
-
-def test_unknown_model_falls_back_to_scripted(monkeypatch):
+def test_scripted_model_explicitly_selects_scripted_agent(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     agent = make_negotiation_agent(config("scripted"))
 
     assert isinstance(agent, ScriptedNegotiationAgent)
+import pytest

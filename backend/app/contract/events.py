@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.security import allowed_models
 
 
 class AgentRosterEntry(BaseModel):
@@ -107,17 +109,24 @@ ServerEvent = Annotated[
 
 
 class AgentConfig(BaseModel):
-    id: str
-    label: str
-    model: str
-    strategy_prompt: str
-    temperature: float = 1.0
+    id: str = Field(min_length=1, max_length=64)
+    label: str = Field(min_length=1, max_length=100)
+    model: str = Field(min_length=1, max_length=100)
+    strategy_prompt: str = Field(max_length=2000)
+    temperature: float = Field(default=1.0, ge=0, le=2)
+
+    @field_validator("model")
+    @classmethod
+    def model_must_be_allowed(cls, model: str) -> str:
+        if model not in allowed_models():
+            raise ValueError(f"model {model!r} is not allowed")
+        return model
 
 
 class StartMatch(BaseModel):
     type: Literal["start_match"] = "start_match"
     environment: str
-    agents: list[AgentConfig]
+    agents: list[AgentConfig] = Field(min_length=2, max_length=2)
 
 
 class CancelMatch(BaseModel):

@@ -103,6 +103,7 @@ async def run_tournament(
                 on_result(result)
             return result
         except Exception as exc:  # one failed model call must not abort the whole batch
+            logger.exception("Tournament match %s failed", match_id)
             with Session(engine) as session:
                 persisted = session.get(Match, match_id)
                 if persisted is not None:

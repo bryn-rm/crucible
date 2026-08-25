@@ -19,6 +19,7 @@ fact once the whole response (and trailing action) is already known.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -42,6 +43,7 @@ from app.contract.interfaces import Action, Agent, Environment
 from app.contract.models import Match, MatchAgent, Score, Turn
 
 MAX_ACT_ATTEMPTS = 2
+logger = logging.getLogger(__name__)
 
 
 class MatchOrchestrator:
@@ -51,6 +53,8 @@ class MatchOrchestrator:
         self.max_rounds = max_rounds
 
     async def run(self, match_id: str, session: Session | None = None) -> AsyncIterator[ServerEvent]:
+        match_started_at = time.monotonic()
+        logger.info("Match %s started environment=%s", match_id, self.environment.name)
         agent_ids = [agent.id for agent in self.agents]
         state = self.environment.reset(agent_ids)
 
@@ -78,7 +82,6 @@ class MatchOrchestrator:
                     )
                 )
             session.commit()
-
         turn_no = 0
         schema_cache: dict[str, TypeAdapter] = {}
 
@@ -170,6 +173,12 @@ class MatchOrchestrator:
                     match_agent.final_score = value
                     session.add(match_agent)
             session.commit()
+        logger.info(
+            "Match %s completed reason=%s duration_ms=%d",
+            match_id,
+            reason,
+            int((time.monotonic() - match_started_at) * 1000),
+        )
 
     async def _act_with_retry(
         self,
@@ -192,16 +201,15 @@ class MatchOrchestrator:
         """
         last_error: str | None = None
         obs = observation
-        chunks: list[str] = []
-
         for attempt in range(MAX_ACT_ATTEMPTS):
             if attempt > 0:
                 obs = {**observation, "retry_hint": last_error}
 
             queue: asyncio.Queue[str] = asyncio.Queue()
+            attempt_chunks: list[str] = []
 
             async def on_chunk(text: str) -> None:
-                chunks.append(text)
+                attempt_chunks.append(text)
                 await queue.put(text)
 
             act_task = asyncio.create_task(agent.act(obs, on_chunk=on_chunk))
@@ -242,10 +250,14 @@ class MatchOrchestrator:
                 continue
 
             turn_outcome.update(
-                action=candidate, state=step_result.state, chunks=chunks, forfeited=False, error=None
+                action=candidate,
+                state=step_result.state,
+                chunks=attempt_chunks,
+                forfeited=False,
+                error=None,
             )
             return
 
         turn_outcome.update(
-            action={"type": "forfeit"}, state=state, chunks=chunks, forfeited=True, error=last_error
+            action={"type": "forfeit"}, state=state, chunks=[], forfeited=True, error=last_error
         )

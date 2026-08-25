@@ -70,7 +70,7 @@ class LeaderboardResponse(BaseModel):
 
 class TournamentRequest(BaseModel):
     environment: str = "negotiation"
-    agents: list[AgentConfig]
+    agents: list[AgentConfig] = Field(min_length=2, max_length=2)
     matches: int = 10
     concurrency: int = 2
     seed: int = 42

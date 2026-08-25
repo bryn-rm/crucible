@@ -30,7 +30,10 @@ export class LiveMatchSocket implements MatchSocket {
     url: string = import.meta.env.VITE_WS_URL ??
       `${location.origin.replace(/^http/, 'ws')}/ws/match`,
   ) {
-    this.ws = new WebSocket(url);
+    const authenticatedUrl = new URL(url);
+    const token = sessionStorage.getItem('arena_api_token');
+    if (token) authenticatedUrl.searchParams.set('token', token);
+    this.ws = new WebSocket(authenticatedUrl);
     this.ws.onopen = () => this.openHandlers.forEach((handler) => handler());
     this.ws.onclose = () => this.closeHandlers.forEach((handler) => handler());
     this.ws.onerror = () => this.errorHandlers.forEach((handler) => handler());

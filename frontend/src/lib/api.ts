@@ -11,7 +11,10 @@ import type { JudgeResult, LeaderboardResponse, MatchDetail, MatchSummary, Tourn
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? `${location.origin}/api`;
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const headers = new Headers(init?.headers);
+  const token = sessionStorage.getItem('arena_api_token');
+  if (token) headers.set('X-Arena-Token', token);
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     throw new Error(`${response.status} ${response.statusText}${body ? `: ${body}` : ''}`);

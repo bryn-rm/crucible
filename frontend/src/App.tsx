@@ -15,6 +15,40 @@ const TABS: { id: Tab; label: string }[] = [
 
 function App() {
   const [tab, setTab] = useState<Tab>('match');
+  const [token, setToken] = useState(() => sessionStorage.getItem('arena_api_token') ?? '');
+  const [tokenInput, setTokenInput] = useState('');
+
+  if (!token) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md items-center px-6 text-neutral-100">
+        <form
+          className="setup-card w-full"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = tokenInput.trim();
+            if (!value) return;
+            sessionStorage.setItem('arena_api_token', value);
+            setToken(value);
+          }}
+        >
+          <span className="eyebrow">Protected arena</span>
+          <h1>Enter the arena access token.</h1>
+          <label>
+            Access token
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={tokenInput}
+              onChange={(event) => setTokenInput(event.target.value)}
+            />
+          </label>
+          <button className="start-button" type="submit" disabled={!tokenInput.trim()}>
+            Enter arena
+          </button>
+        </form>
+      </main>
+    );
+  }
 
   return (
     <div className="mx-auto min-h-screen max-w-6xl px-6 py-8 text-neutral-100">
@@ -37,7 +71,7 @@ function App() {
         </nav>
       </header>
 
-      {tab === 'match' && <MatchView />}
+      <div hidden={tab !== 'match'}><MatchView /></div>
       {tab === 'tournament' && <TournamentView />}
       {tab === 'replay' && <ReplayView />}
       {tab === 'leaderboard' && <LeaderboardView />}

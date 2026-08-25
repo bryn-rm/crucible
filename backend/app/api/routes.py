@@ -27,12 +27,15 @@ from app.api.schemas import (
 from app.contract.models import Match, MatchAgent, Score, Turn
 from app.db import get_session
 from app.judge import JudgeResult, judge_match
+from app.security import require_api_token
 from app.tournament import get_tournament, start_tournament
 
 router = APIRouter()
 
 
-@router.post("/tournaments", response_model=TournamentResponse)
+@router.post(
+    "/tournaments", response_model=TournamentResponse, dependencies=[Depends(require_api_token)]
+)
 async def tournament(request: TournamentRequest) -> TournamentResponse:
     if len(request.agents) != 2:
         raise HTTPException(status_code=422, detail="tournaments require exactly two agents")
@@ -53,7 +56,11 @@ async def tournament(request: TournamentRequest) -> TournamentResponse:
     return _tournament_response(job)
 
 
-@router.get("/tournaments/{tournament_id}", response_model=TournamentResponse)
+@router.get(
+    "/tournaments/{tournament_id}",
+    response_model=TournamentResponse,
+    dependencies=[Depends(require_api_token)],
+)
 async def tournament_status(tournament_id: str) -> TournamentResponse:
     job = get_tournament(tournament_id)
     if job is None:

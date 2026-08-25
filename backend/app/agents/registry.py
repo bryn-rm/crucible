@@ -37,9 +37,9 @@ _SCRIPTED_BY_ENV: dict[str, type[Agent]] = {
 def make_negotiation_agent(config: AgentConfig) -> Agent:
     """Pick the negotiation Agent implementation for `config.model`.
 
-    Falls back to the scripted/dummy agent when the model doesn't match a
-    known provider prefix, or that provider's API key isn't configured — so
-    a match still runs end-to-end instead of failing outright.
+    The explicit ``scripted`` model selects the local demo agent. Real model
+    requests fail when their provider key is unavailable so results are never
+    silently attributed to an implementation that did not run.
     """
     return make_agent(config, "negotiation")
 
@@ -47,14 +47,20 @@ def make_negotiation_agent(config: AgentConfig) -> Agent:
 def make_agent(config: AgentConfig, environment: str) -> Agent:
     """Resolve a provider implementation appropriate to the environment.
 
-    Falls back to the scripted/dummy agent when the model doesn't match a
-    known provider prefix, or that provider's API key isn't configured — so
-    a match still runs end-to-end instead of failing outright.
+    The explicit ``scripted`` model selects the local demo agent. Real model
+    requests fail when their provider key is unavailable so results are never
+    silently attributed to an implementation that did not run.
     """
     providers = _PROVIDERS_BY_ENV.get(environment)
     if providers is None:
         raise ValueError(f"no agent implementation registered for environment {environment!r}")
     for prefix, api_key_env, agent_cls in providers:
-        if config.model.startswith(prefix) and os.environ.get(api_key_env):
+        if config.model.startswith(prefix):
+            if not os.environ.get(api_key_env):
+                raise ValueError(
+                    f"model {config.model!r} requires the {api_key_env} environment variable"
+                )
             return agent_cls(config)
-    return _SCRIPTED_BY_ENV[environment](config)
+    if config.model == "scripted":
+        return _SCRIPTED_BY_ENV[environment](config)
+    raise ValueError(f"no provider registered for model {config.model!r}")
