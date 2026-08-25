@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlmodel import Session, select
 
 from app.contract.events import AgentConfig
@@ -57,8 +58,18 @@ async def test_tournament_endpoint_rejects_unsafe_batch_limits():
         AgentConfig(id="a", label="A", model="scripted", strategy_prompt="a"),
         AgentConfig(id="b", label="B", model="scripted", strategy_prompt="b"),
     ]
+    with pytest.raises(ValidationError):
+        TournamentRequest(agents=agents, matches=51, concurrency=2)
+
+
+@pytest.mark.asyncio
+async def test_tournament_endpoint_rejects_unknown_environment_before_start():
+    agents = [
+        AgentConfig(id="a", label="A", model="scripted", strategy_prompt="a"),
+        AgentConfig(id="b", label="B", model="scripted", strategy_prompt="b"),
+    ]
     with pytest.raises(HTTPException) as exc_info:
-        await tournament(TournamentRequest(agents=agents, matches=51, concurrency=2))
+        await tournament(TournamentRequest(environment="missing", agents=agents))
     assert exc_info.value.status_code == 422
 
 
@@ -68,7 +79,7 @@ async def test_background_tournament_returns_handle_and_completes():
         AgentConfig(id="a", label="A", model="scripted", strategy_prompt="a"),
         AgentConfig(id="b", label="B", model="scripted", strategy_prompt="b"),
     ]
-    job = start_tournament("negotiation", agents, matches=2, concurrency=2, seed=9)
+    job = await start_tournament("negotiation", agents, matches=2, concurrency=2, seed=9)
 
     assert job.status == "running"
     for _ in range(100):
@@ -94,12 +105,12 @@ async def test_background_tournament_reports_progress(monkeypatch):
 
     async def fake_run(*args, on_result, **kwargs):
         result = TournamentMatchResult(match_id="first", status="completed")
-        on_result(result)
+        await on_result(result)
         await release.wait()
         return [result]
 
     monkeypatch.setattr("app.tournament.run_tournament", fake_run)
-    job = start_tournament("negotiation", agents, matches=1, concurrency=1, seed=9)
+    job = await start_tournament("negotiation", agents, matches=1, concurrency=1, seed=9)
     await asyncio.sleep(0)
 
     assert job.status == "running"
@@ -121,7 +132,7 @@ async def test_background_tournament_marks_unexpected_failure_as_error(monkeypat
         raise RuntimeError("batch exploded")
 
     monkeypatch.setattr("app.tournament.run_tournament", fake_run)
-    job = start_tournament("negotiation", agents, matches=1, concurrency=1, seed=9)
+    job = await start_tournament("negotiation", agents, matches=1, concurrency=1, seed=9)
     await asyncio.gather(*_tasks)
 
     assert job.status == "error"

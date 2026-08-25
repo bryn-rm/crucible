@@ -15,12 +15,22 @@ def test_reset_requires_two_agents():
         env.reset(["only_one"])
 
 
+def test_reset_rejects_duplicate_agent_ids():
+    with pytest.raises(ValueError, match="unique"):
+        make_env().reset(["same", "same"])
+
+
 def test_reset_builds_private_valuations_for_each_agent():
     env = make_env()
     state = env.reset(AGENTS)
     assert set(state["valuations"]) == set(AGENTS)
     for agent_id in AGENTS:
         assert set(state["valuations"][agent_id]) == set(state["items"])
+        maximum = sum(
+            state["valuations"][agent_id][item] * quantity
+            for item, quantity in state["items"].items()
+        )
+        assert maximum == pytest.approx(100)
 
 
 def test_observe_excludes_other_agents_valuation():

@@ -1,17 +1,24 @@
+import { memo } from 'react';
 import { actionLabel } from './actionLabel';
 
-export function MatchState({ state }: { state: Record<string, unknown> | null }) {
+export const MatchState = memo(function MatchState({
+  environment,
+  state,
+}: {
+  environment: string;
+  state: Record<string, unknown> | null;
+}) {
   if (!state) {
     return <p className="empty-copy">The public match state will appear after the match starts.</p>;
   }
 
-  const transcript = state.transcript as Array<{
-    turn_no: number;
-    agent_id: string;
-    role: string;
-    text: string;
-  }> | undefined;
-  if (transcript) {
+  if (environment === 'role_play') {
+    const transcript = (state.transcript ?? []) as Array<{
+      turn_no: number;
+      agent_id: string;
+      role: string;
+      text: string;
+    }>;
     return (
       <div className="history-list">
         {transcript.length === 0 && <p className="empty-copy">The interview is about to begin.</p>}
@@ -67,4 +74,4 @@ export function MatchState({ state }: { state: Record<string, unknown> | null })
       </div>
     </div>
   );
-}
+});

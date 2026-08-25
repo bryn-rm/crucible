@@ -8,9 +8,10 @@ Response shapes live in app/api/schemas.py.
 from __future__ import annotations
 
 import os
-from collections import defaultdict
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.api.schemas import (
@@ -26,6 +27,7 @@ from app.api.schemas import (
 )
 from app.contract.models import Match, MatchAgent, Score, Turn
 from app.db import get_session
+from app.environments.registry import get_environment
 from app.judge import JudgeResult, judge_match
 from app.security import require_api_token
 from app.tournament import get_tournament, start_tournament
@@ -39,12 +41,9 @@ router = APIRouter()
 async def tournament(request: TournamentRequest) -> TournamentResponse:
     if len(request.agents) != 2:
         raise HTTPException(status_code=422, detail="tournaments require exactly two agents")
-    if not 1 <= request.matches <= 50:
-        raise HTTPException(status_code=422, detail="matches must be between 1 and 50")
-    if not 1 <= request.concurrency <= 5:
-        raise HTTPException(status_code=422, detail="concurrency must be between 1 and 5")
     try:
-        job = start_tournament(
+        get_environment(request.environment)
+        job = await start_tournament(
             request.environment,
             request.agents,
             request.matches,
@@ -62,7 +61,7 @@ async def tournament(request: TournamentRequest) -> TournamentResponse:
     dependencies=[Depends(require_api_token)],
 )
 async def tournament_status(tournament_id: str) -> TournamentResponse:
-    job = get_tournament(tournament_id)
+    job = await asyncio.to_thread(get_tournament, tournament_id)
     if job is None:
         raise HTTPException(status_code=404, detail="tournament not found")
     return _tournament_response(job)
@@ -164,26 +163,49 @@ def get_match(match_id: str, session: Session = Depends(get_session)) -> MatchDe
     )
 
 
-def _leaderboard_entries(rows: dict[str, list[tuple[float, bool, bool]]]) -> list[LeaderboardEntry]:
-    """`rows` maps a grouping key (model or strategy) to a list of
-    `(payoff, won, drew)` tuples, one per agent-in-a-match."""
-    entries = []
-    for key, results in rows.items():
-        matches = len(results)
-        wins = sum(1 for _, won, _ in results if won)
-        draws = sum(1 for _, _, drew in results if drew)
-        mean_payoff = sum(payoff for payoff, _, _ in results) / matches
+def _leaderboard_entries(session: Session, grouping: str) -> list[LeaderboardEntry]:
+    """Aggregate completed payoff rows in SQLite, including win/draw status."""
+    if grouping not in {"model", "strategy"}:
+        raise ValueError("invalid leaderboard grouping")
+    statement = text(f"""
+        WITH payoffs AS (
+            SELECT s.match_id, s.agent_id, s.value, ma.{grouping} AS grouping_key,
+                   MAX(s.value) OVER (PARTITION BY s.match_id) AS best,
+                   COUNT(*) OVER (PARTITION BY s.match_id) AS participants
+            FROM scores AS s
+            JOIN matches AS m ON m.id = s.match_id AND m.status = 'completed'
+            JOIN match_agents AS ma
+              ON ma.match_id = s.match_id AND ma.agent_id = s.agent_id
+            WHERE s.dimension = 'payoff'
+        ), assessed AS (
+            SELECT *, SUM(CASE WHEN value = best THEN 1 ELSE 0 END)
+                       OVER (PARTITION BY match_id) AS winner_count
+            FROM payoffs
+            WHERE participants >= 2
+        )
+        SELECT grouping_key, COUNT(*) AS matches,
+               SUM(CASE WHEN value = best AND winner_count = 1 THEN 1 ELSE 0 END) AS wins,
+               SUM(CASE WHEN winner_count != 1 THEN 1 ELSE 0 END) AS draws,
+               AVG(value) AS mean_payoff
+        FROM assessed
+        GROUP BY grouping_key
+        ORDER BY (1.0 * SUM(CASE WHEN value = best AND winner_count = 1 THEN 1 ELSE 0 END)
+                  / COUNT(*)) DESC
+    """)
+    entries: list[LeaderboardEntry] = []
+    for row in session.execute(statement).mappings():
+        matches = int(row["matches"])
+        wins = int(row["wins"])
         entries.append(
             LeaderboardEntry(
-                key=key,
+                key=str(row["grouping_key"]),
                 matches=matches,
                 wins=wins,
-                draws=draws,
+                draws=int(row["draws"]),
                 win_rate=wins / matches,
-                mean_payoff=mean_payoff,
+                mean_payoff=float(row["mean_payoff"]),
             )
         )
-    entries.sort(key=lambda e: e.win_rate, reverse=True)
     return entries
 
 
@@ -194,41 +216,9 @@ def leaderboard(session: Session = Depends(get_session)) -> LeaderboardResponse:
     payoff than the other participant(s) in that match; equal payoffs are a
     draw. Every entry carries its match count alongside the rate — a handful
     of nondeterministic LLM matches proves nothing on its own."""
-    completed_ids = {
-        m.id for m in session.exec(select(Match).where(Match.status == "completed")).all()
-    }
-    payoff_scores = session.exec(select(Score).where(Score.dimension == "payoff")).all()
-
-    by_match: dict[str, dict[str, float]] = defaultdict(dict)
-    for score in payoff_scores:
-        if score.match_id in completed_ids:
-            by_match[score.match_id][score.agent_id] = score.value
-
-    match_agents = session.exec(select(MatchAgent)).all()
-    agent_meta: dict[tuple[str, str], MatchAgent] = {
-        (ma.match_id, ma.agent_id): ma for ma in match_agents
-    }
-
-    by_model: dict[str, list[tuple[float, bool, bool]]] = defaultdict(list)
-    by_strategy: dict[str, list[tuple[float, bool, bool]]] = defaultdict(list)
-
-    for match_id, scores in by_match.items():
-        if len(scores) < 2:
-            continue
-        best = max(scores.values())
-        winners = [agent_id for agent_id, value in scores.items() if value == best]
-        drew = len(winners) != 1
-        for agent_id, payoff in scores.items():
-            meta = agent_meta.get((match_id, agent_id))
-            if meta is None:
-                continue
-            won = not drew and agent_id in winners
-            by_model[meta.model].append((payoff, won, drew))
-            by_strategy[meta.strategy].append((payoff, won, drew))
-
     return LeaderboardResponse(
-        by_model=_leaderboard_entries(by_model),
-        by_strategy=_leaderboard_entries(by_strategy),
+        by_model=_leaderboard_entries(session, "model"),
+        by_strategy=_leaderboard_entries(session, "strategy"),
     )
 
 
@@ -238,7 +228,9 @@ async def judge(match_id: str, session: Session = Depends(get_session)) -> Judge
     a separate pass, and persist its dimensions as `judge_<dimension>` Score
     rows (re-running replaces the previous judge pass, never the objective
     `payoff` rows the orchestrator wrote)."""
-    match = session.get(Match, match_id)
+    # This is the only async REST route using the synchronous SQLModel engine;
+    # run each DB phase in a worker thread so judging cannot stall live sockets.
+    match = await asyncio.to_thread(session.get, Match, match_id)
     if match is None:
         raise HTTPException(status_code=404, detail="match not found")
     if match.status != "completed":
@@ -246,10 +238,14 @@ async def judge(match_id: str, session: Session = Depends(get_session)) -> Judge
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not configured")
 
-    agents = _match_agents_out(session, match_id)
-    turns = session.exec(
-        select(Turn).where(Turn.match_id == match_id).order_by(Turn.turn_no)
-    ).all()
+    agents = await asyncio.to_thread(_match_agents_out, session, match_id)
+
+    def load_turns() -> list[Turn]:
+        return list(
+            session.exec(select(Turn).where(Turn.match_id == match_id).order_by(Turn.turn_no)).all()
+        )
+
+    turns = await asyncio.to_thread(load_turns)
 
     # Persisted observations contain trusted role-scoped JD/CV context. It is
     # supplied only to the server-side judge, never to public replay responses.
@@ -284,14 +280,24 @@ async def judge(match_id: str, session: Session = Depends(get_session)) -> Judge
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    existing = session.exec(
-        select(Score).where(Score.match_id == match_id, Score.dimension.startswith("judge_"))
-    ).all()
-    for row in existing:
-        session.delete(row)
-    for agent_id, judgment in result.agents.items():
-        for dimension, value in judgment.scores.items():
-            session.add(Score(match_id=match_id, agent_id=agent_id, dimension=f"judge_{dimension}", value=value))
-    session.commit()
+    def persist_scores() -> None:
+        existing = session.exec(
+            select(Score).where(Score.match_id == match_id, Score.dimension.like("judge\\_%", escape="\\"))
+        ).all()
+        for row in existing:
+            session.delete(row)
+        for agent_id, judgment in result.agents.items():
+            for dimension, value in judgment.scores.items():
+                session.add(
+                    Score(
+                        match_id=match_id,
+                        agent_id=agent_id,
+                        dimension=f"judge_{dimension}",
+                        value=value,
+                    )
+                )
+        session.commit()
+
+    await asyncio.to_thread(persist_scores)
 
     return result

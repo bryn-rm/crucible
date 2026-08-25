@@ -76,6 +76,13 @@ async def test_parses_trailing_json_action():
 
 
 @pytest.mark.asyncio
+async def test_parses_json_action_inside_markdown_fence():
+    agent, _ = make_agent(['Reasoning\n```json\n{"type":"accept"}\n```'])
+
+    assert await agent.act(OBSERVATION) == {"type": "accept"}
+
+
+@pytest.mark.asyncio
 async def test_parses_final_json_action_after_earlier_json_in_reasoning():
     agent, _ = make_agent(
         ['The standing offer is {"books": 2}.\n', '{"type": "offer", "split": {"books": 1}}']

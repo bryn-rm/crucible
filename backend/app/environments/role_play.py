@@ -14,6 +14,7 @@ from app.contract.actions import RolePlayAction
 from app.contract.interfaces import Action, Environment, Observation, State, StepResult
 
 DEFAULT_MAX_TURNS = 8
+MAX_UTTERANCE_LENGTH = 10_000
 DEFAULT_JOB_DESCRIPTION = (
     "Backend engineer building reliable Python APIs and asynchronous LLM workflows. "
     "The role values clear communication, testing, and pragmatic system design."
@@ -40,6 +41,8 @@ class InterviewRolePlayEnvironment(Environment):
     def reset(self, agent_ids: list[str]) -> State:
         if len(agent_ids) != 2:
             raise ValueError(f"role_play requires exactly 2 agents, got {len(agent_ids)}")
+        if len(set(agent_ids)) != len(agent_ids):
+            raise ValueError("role_play requires unique agent ids")
         interviewer, candidate = agent_ids
         return {
             "agent_ids": list(agent_ids),
@@ -70,10 +73,15 @@ class InterviewRolePlayEnvironment(Environment):
 
     def step(self, state: State, agent_id: str, action: Action) -> StepResult:
         new_state = copy.deepcopy(state)
+        expected_agent = state["agent_ids"][len(state["transcript"]) % len(state["agent_ids"])]
+        if agent_id != expected_agent:
+            raise ValueError(f"expected {expected_agent!r} to act, got {agent_id!r}")
         if action["type"] == "say":
             text = action["text"].strip()
             if not text:
                 raise ValueError("utterance cannot be empty")
+            if len(text) > MAX_UTTERANCE_LENGTH:
+                raise ValueError(f"utterance exceeds {MAX_UTTERANCE_LENGTH} characters")
             new_state["transcript"].append(
                 {
                     "turn_no": len(state["transcript"]) + 1,
@@ -105,3 +113,8 @@ class InterviewRolePlayEnvironment(Environment):
             "turns_taken": len(state["transcript"]),
             "max_turns": state["max_turns"],
         }
+
+    def summarize(self, state: State, scores: dict[str, float]) -> tuple[str, str]:
+        if state["status"] == "completed":
+            return "completed", "Interview completed"
+        return "round_limit", "Awaiting judge scores"

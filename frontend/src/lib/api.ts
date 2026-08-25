@@ -8,7 +8,7 @@
 
 import type { JudgeResult, LeaderboardResponse, MatchDetail, MatchSummary, TournamentRequest, TournamentResponse } from '../api/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? `${location.origin}/api`;
+const API_BASE_URL = import.meta.env.VITE_API_URL || `${location.origin}/api`;
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
@@ -22,30 +22,35 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function listMatches(limit = 20, offset = 0): Promise<MatchSummary[]> {
-  return apiFetch(`/matches?limit=${limit}&offset=${offset}`);
+export function listMatches(limit = 20, offset = 0, signal?: AbortSignal): Promise<MatchSummary[]> {
+  return apiFetch(`/matches?limit=${limit}&offset=${offset}`, { signal });
 }
 
-export function getMatch(matchId: string): Promise<MatchDetail> {
-  return apiFetch(`/matches/${matchId}`);
+export function getMatch(matchId: string, signal?: AbortSignal): Promise<MatchDetail> {
+  return apiFetch(`/matches/${matchId}`, { signal });
 }
 
 export function getLeaderboard(): Promise<LeaderboardResponse> {
   return apiFetch('/leaderboard');
 }
 
-export function runJudge(matchId: string): Promise<JudgeResult> {
-  return apiFetch(`/matches/${matchId}/judge`, { method: 'POST' });
+export function runJudge(matchId: string, signal?: AbortSignal): Promise<JudgeResult> {
+  return apiFetch(`/matches/${matchId}/judge`, { method: 'POST', signal });
 }
 
-export function runTournament(request: TournamentRequest): Promise<TournamentResponse> {
+export function runTournament(request: TournamentRequest, signal?: AbortSignal): Promise<TournamentResponse> {
   return apiFetch('/tournaments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
+    signal,
   });
 }
 
-export function getTournament(tournamentId: string): Promise<TournamentResponse> {
-  return apiFetch(`/tournaments/${tournamentId}`);
+export function getTournament(tournamentId: string, signal?: AbortSignal): Promise<TournamentResponse> {
+  return apiFetch(`/tournaments/${tournamentId}`, { signal });
+}
+
+export function listEnvironments(signal?: AbortSignal): Promise<string[]> {
+  return apiFetch('/environments', { signal });
 }

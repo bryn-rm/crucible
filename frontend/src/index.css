@@ -39,7 +39,7 @@ input:focus, textarea:focus, select:focus { border-color: #65ae88; }
 .agent-card h3, .environment-card h3 { margin: .25rem 0 0; font-family: Georgia, serif; font-size: 1.5rem; font-weight: 400; }
 .score { display: grid; place-items: center; min-width: 3rem; min-height: 3rem; border-radius: 50%; background: #202722; color: #aee5c6; }
 .reasoning { min-height: 175px; padding: 1.25rem 0; }
-.reasoning p { color: #bdc5c0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: .82rem; line-height: 1.7; white-space: pre-wrap; }
+.reasoning p { max-height: 14rem; overflow-y: auto; overscroll-behavior: contain; color: #bdc5c0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: .82rem; line-height: 1.7; white-space: pre-wrap; }
 .cursor { display: inline-block; width: .45rem; height: 1rem; margin-left: .25rem; background: #65d69c; animation: blink 1s step-end infinite; vertical-align: middle; }
 @keyframes blink { 50% { opacity: 0; } }
 .latest-action { border-left: 2px solid #65ae88; padding-left: .8rem; }

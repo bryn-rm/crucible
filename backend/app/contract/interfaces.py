@@ -71,6 +71,10 @@ class Environment(ABC):
     def public_view(self, state: State) -> dict[str, Any]:
         """The redacted state safe to stream to viewers. Must never leak private info."""
 
+    @abstractmethod
+    def summarize(self, state: State, scores: dict[str, float]) -> tuple[str, str]:
+        """Return the contract-level terminal reason and human-readable outcome."""
+
 
 class Agent(ABC):
     """An agent that observes and acts (scripted, Claude-backed, ...)."""

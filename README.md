@@ -141,5 +141,5 @@ Principles
 Commit at every green state — a working point to fall back to always exists.
 One writer to the socket — all events serialize through a single writer draining a queue; never concurrent sends from parallel agent tasks.
 Validate agent actions — agents emit malformed JSON / illegal moves; validate, retry once, forfeit the turn. A bad action never crashes the match loop.
-Never leak private info — an environment's public_view (streamed to the browser) excludes private state (valuations, private rubrics). Enforce redaction at the env boundary, not the UI.
+Never leak private state through environment updates — an environment's `public_view` excludes valuations and cross-role private context, and redaction is enforced at the environment boundary rather than the UI. The current product is explicitly a spectator/evaluation UI: agent-authored reasoning is intentionally streamed and retained for replay, so an agent may mention information from its own private observation there. Do not expose the reasoning feed to opposing participants without adding a separate participant-safe event and replay policy.
 Honest measurement — LLM nondeterminism means single matches prove nothing; aggregate claims show match counts and control what they can. This rigor is what makes the arena more than a toy.

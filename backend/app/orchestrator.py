@@ -81,7 +81,7 @@ class MatchOrchestrator:
                         strategy=agent.config.strategy_prompt,
                     )
                 )
-            session.commit()
+            await asyncio.to_thread(session.commit)
         turn_no = 0
         schema_cache: dict[str, TypeAdapter] = {}
 
@@ -133,22 +133,10 @@ class MatchOrchestrator:
                         latency_ms=latency_ms,
                     )
                 )
-                session.commit()
+                await asyncio.to_thread(session.commit)
 
         final_scores = self.environment.score(state)
-        status = state.get("status")
-        if status == "agreement":
-            reason = "agreement"
-        elif status == "completed":
-            reason = "completed"
-        else:
-            # Negotiation walkaways and exhausted turns are both no-agreement outcomes.
-            reason = "round_limit"
-        outcome = (
-            ", ".join(f"{agent_id}={value:g}" for agent_id, value in final_scores.items())
-            if final_scores
-            else "Interview completed" if reason == "completed" else "Awaiting judge scores"
-        )
+        reason, outcome = self.environment.summarize(state, final_scores)
 
         yield ScoreUpdate(match_id=match_id, scores=final_scores)
         yield MatchEnded(match_id=match_id, outcome=outcome, final_scores=final_scores, reason=reason)
@@ -156,7 +144,7 @@ class MatchOrchestrator:
         if session is not None:
             for agent_id, value in final_scores.items():
                 session.add(Score(match_id=match_id, agent_id=agent_id, dimension="payoff", value=value))
-            match = session.get(Match, match_id)
+            match = await asyncio.to_thread(session.get, Match, match_id)
             if match is not None:
                 match.status = "completed"
                 match.outcome = outcome
@@ -164,15 +152,18 @@ class MatchOrchestrator:
                 match.ended_at = datetime.now(UTC)
                 session.add(match)
             for agent_id, value in final_scores.items():
-                match_agent = session.exec(
-                    select(MatchAgent).where(
-                        MatchAgent.match_id == match_id, MatchAgent.agent_id == agent_id
-                    )
-                ).first()
+                def find_match_agent() -> MatchAgent | None:
+                    return session.exec(
+                        select(MatchAgent).where(
+                            MatchAgent.match_id == match_id, MatchAgent.agent_id == agent_id
+                        )
+                    ).first()
+
+                match_agent = await asyncio.to_thread(find_match_agent)
                 if match_agent is not None:
                     match_agent.final_score = value
                     session.add(match_agent)
-            session.commit()
+            await asyncio.to_thread(session.commit)
         logger.info(
             "Match %s completed reason=%s duration_ms=%d",
             match_id,

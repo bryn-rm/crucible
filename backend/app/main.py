@@ -11,6 +11,7 @@ from app.api.routes import router as rest_router
 from app.api.ws import router as ws_router
 from app.db import init_db
 from app.security import configured_origins
+from app.tournament import stop_tournaments
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -21,7 +22,10 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    yield
+    try:
+        yield
+    finally:
+        await stop_tournaments()
 
 
 app = FastAPI(title="Multi-Agent Arena", lifespan=lifespan)

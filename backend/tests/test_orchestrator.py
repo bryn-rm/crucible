@@ -8,6 +8,8 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.agents.scripted import ScriptedNegotiationAgent
 from app.contract import models  # noqa: F401 - registers tables on SQLModel.metadata
 from app.contract.interfaces import Action, Agent, AgentConfig, Observation
+from app.contract.actions import NegotiationAction, RolePlayAction
+from pydantic import TypeAdapter
 from app.contract.models import Match, Score, Turn
 from app.environments.negotiation import NegotiationEnvironment
 from app.orchestrator import MatchOrchestrator
@@ -96,6 +98,11 @@ def in_memory_session() -> Session:
     )
     SQLModel.metadata.create_all(engine)
     return Session(engine)
+
+
+def test_forfeit_is_part_of_both_action_contracts():
+    assert TypeAdapter(NegotiationAction).validate_python({"type": "forfeit"}).type == "forfeit"
+    assert TypeAdapter(RolePlayAction).validate_python({"type": "forfeit"}).type == "forfeit"
 
 
 @pytest.mark.asyncio

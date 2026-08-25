@@ -21,22 +21,17 @@ VALUATION_TOTAL = 100
 
 def _generate_valuations(
     items: dict[str, int], agent_ids: list[str], rng: random.Random
-) -> dict[str, dict[str, int]]:
-    valuations: dict[str, dict[str, int]] = {}
+) -> dict[str, dict[str, float]]:
+    valuations: dict[str, dict[str, float]] = {}
     item_names = list(items)
     for agent_id in agent_ids:
         weights = [rng.random() for _ in item_names]
         weight_sum = sum(weights)
-        remaining = VALUATION_TOTAL
-        per_unit: dict[str, int] = {}
-        for i, item in enumerate(item_names):
+        per_unit: dict[str, float] = {}
+        for item, weight in zip(item_names, weights, strict=True):
             qty = items[item]
-            if i == len(item_names) - 1:
-                item_total = remaining
-            else:
-                item_total = round(VALUATION_TOTAL * weights[i] / weight_sum)
-                remaining -= item_total
-            per_unit[item] = item_total // qty if qty else 0
+            item_total = VALUATION_TOTAL * weight / weight_sum
+            per_unit[item] = item_total / qty if qty else 0.0
         valuations[agent_id] = per_unit
     return valuations
 
@@ -57,6 +52,8 @@ class NegotiationEnvironment(Environment):
     def reset(self, agent_ids: list[str]) -> State:
         if len(agent_ids) != 2:
             raise ValueError(f"negotiation requires exactly 2 agents, got {len(agent_ids)}")
+        if len(set(agent_ids)) != len(agent_ids):
+            raise ValueError("negotiation requires unique agent ids")
         return {
             "agent_ids": list(agent_ids),
             "items": dict(self.items),
@@ -146,3 +143,8 @@ class NegotiationEnvironment(Environment):
             "turns_taken": len(state["history"]),
             "max_turns": state["max_turns"],
         }
+
+    def summarize(self, state: State, scores: dict[str, float]) -> tuple[str, str]:
+        reason = "agreement" if state["status"] == "agreement" else "round_limit"
+        outcome = ", ".join(f"{agent_id}={value:g}" for agent_id, value in scores.items())
+        return reason, outcome

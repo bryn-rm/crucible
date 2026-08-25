@@ -35,6 +35,11 @@ def test_private_context_is_role_scoped_and_redacted_from_public_view():
     assert "SECRET" not in str(public)
 
 
+def test_reset_rejects_duplicate_agent_ids():
+    with pytest.raises(ValueError, match="unique"):
+        InterviewRolePlayEnvironment().reset(["same", "same"])
+
+
 def test_say_appends_public_transcript_without_mutating_input():
     env = InterviewRolePlayEnvironment()
     state = env.reset(AGENTS)
@@ -43,6 +48,15 @@ def test_say_appends_public_transcript_without_mutating_input():
     assert state["transcript"] == []
     assert result.state["transcript"][0]["role"] == "interviewer"
     assert result.state["transcript"][0]["text"] == "Tell me about yourself."
+
+
+def test_say_enforces_turn_order_and_length_limit():
+    env = InterviewRolePlayEnvironment()
+    state = env.reset(AGENTS)
+    with pytest.raises(ValueError, match="expected"):
+        env.step(state, "candidate", {"type": "say", "text": "Going first"})
+    with pytest.raises(ValueError, match="exceeds"):
+        env.step(state, "interviewer", {"type": "say", "text": "x" * 10_001})
 
 
 def test_only_interviewer_can_end_interview():

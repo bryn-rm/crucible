@@ -8,14 +8,14 @@
  * Phases 1-2 against the frozen contract).
  */
 
-import type { ClientEvent, ServerEvent } from '../contract/events';
+import { parseServerEvent, type ClientEvent, type ServerEvent } from '../contract/events';
 
 export interface MatchSocket {
-  send(event: ClientEvent): void;
+  send(event: ClientEvent): boolean;
   onEvent(handler: (event: ServerEvent) => void): () => void;
   onOpen(handler: () => void): () => void;
   onClose(handler: () => void): () => void;
-  onError(handler: () => void): () => void;
+  onError(handler: (error: Error) => void): () => void;
   close(): void;
 }
 
@@ -24,10 +24,10 @@ export class LiveMatchSocket implements MatchSocket {
   private handlers = new Set<(event: ServerEvent) => void>();
   private openHandlers = new Set<() => void>();
   private closeHandlers = new Set<() => void>();
-  private errorHandlers = new Set<() => void>();
+  private errorHandlers = new Set<(error: Error) => void>();
 
   constructor(
-    url: string = import.meta.env.VITE_WS_URL ??
+    url: string = import.meta.env.VITE_WS_URL ||
       `${location.origin.replace(/^http/, 'ws')}/ws/match`,
   ) {
     const authenticatedUrl = new URL(url);
@@ -36,15 +36,28 @@ export class LiveMatchSocket implements MatchSocket {
     this.ws = new WebSocket(authenticatedUrl);
     this.ws.onopen = () => this.openHandlers.forEach((handler) => handler());
     this.ws.onclose = () => this.closeHandlers.forEach((handler) => handler());
-    this.ws.onerror = () => this.errorHandlers.forEach((handler) => handler());
+    this.ws.onerror = () => this.reportError(new Error('WebSocket connection error'));
     this.ws.onmessage = (msg) => {
-      const event = JSON.parse(msg.data) as ServerEvent;
-      this.handlers.forEach((h) => h(event));
+      try {
+        const event = parseServerEvent(JSON.parse(String(msg.data)));
+        this.handlers.forEach((handler) => handler(event));
+      } catch (error) {
+        this.reportError(error instanceof Error ? error : new Error('Invalid WebSocket frame'));
+      }
     };
   }
 
-  send(event: ClientEvent): void {
+  private reportError(error: Error): void {
+    this.errorHandlers.forEach((handler) => handler(error));
+  }
+
+  send(event: ClientEvent): boolean {
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      this.reportError(new Error('The arena connection is not open.'));
+      return false;
+    }
     this.ws.send(JSON.stringify(event));
+    return true;
   }
 
   onEvent(handler: (event: ServerEvent) => void): () => void {
@@ -63,7 +76,7 @@ export class LiveMatchSocket implements MatchSocket {
     return () => this.closeHandlers.delete(handler);
   }
 
-  onError(handler: () => void): () => void {
+  onError(handler: (error: Error) => void): () => void {
     this.errorHandlers.add(handler);
     return () => this.errorHandlers.delete(handler);
   }
@@ -89,11 +102,14 @@ export class MockMatchSocket implements MatchSocket {
     this.stepMs = stepMs;
   }
 
-  send(_event: ClientEvent): void {
+  send(_event: ClientEvent): boolean {
+    this.timers.forEach(clearTimeout);
+    this.timers = [];
     this.script.forEach((event, i) => {
       const t = setTimeout(() => this.handlers.forEach((h) => h(event)), i * this.stepMs);
       this.timers.push(t);
     });
+    return true;
   }
 
   onEvent(handler: (event: ServerEvent) => void): () => void {
@@ -110,7 +126,7 @@ export class MockMatchSocket implements MatchSocket {
     return () => undefined;
   }
 
-  onError(_handler: () => void): () => void {
+  onError(_handler: (error: Error) => void): () => void {
     return () => undefined;
   }
 

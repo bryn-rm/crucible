@@ -4,7 +4,7 @@
  * during the live match.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MatchDetail, MatchSummary } from '../api/types';
 import { getMatch, listMatches, runJudge } from '../lib/api';
 import { actionLabel } from '../match/actionLabel';
@@ -54,6 +54,7 @@ function MatchList({
 }
 
 export function ReplayView() {
+  const judgeRequestRef = useRef<AbortController | null>(null);
   const [matches, setMatches] = useState<MatchSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<MatchDetail | null>(null);
@@ -62,33 +63,59 @@ export function ReplayView() {
   const [judging, setJudging] = useState(false);
 
   useEffect(() => {
-    listMatches()
-      .then(setMatches)
-      .catch((err: Error) => setError(err.message));
+    const controller = new AbortController();
+    listMatches(20, 0, controller.signal)
+      .then((value) => {
+        setMatches(value);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (err.name !== 'AbortError') setError(err.message);
+      });
+    return () => controller.abort();
   }, []);
+
+  useEffect(() => () => judgeRequestRef.current?.abort(), []);
 
   useEffect(() => {
     if (!selectedId) return;
+    const controller = new AbortController();
     setDetail(null);
     setTurnIndex(0);
-    getMatch(selectedId)
-      .then(setDetail)
-      .catch((err: Error) => setError(err.message));
+    setError(null);
+    getMatch(selectedId, controller.signal)
+      .then((value) => {
+        setDetail(value);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (err.name !== 'AbortError') setError(err.message);
+      });
+    return () => controller.abort();
   }, [selectedId]);
 
   const turn = detail?.turns[turnIndex];
 
   async function judgeSelectedMatch() {
     if (!detail) return;
+    judgeRequestRef.current?.abort();
+    const controller = new AbortController();
+    judgeRequestRef.current = controller;
     setJudging(true);
     setError(null);
     try {
-      await runJudge(detail.id);
-      setDetail(await getMatch(detail.id));
+      await runJudge(detail.id, controller.signal);
+      setDetail(await getMatch(detail.id, controller.signal));
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Judge request failed');
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Judge request failed');
+      }
     } finally {
-      setJudging(false);
+      if (judgeRequestRef.current === controller) {
+        judgeRequestRef.current = null;
+        setJudging(false);
+      }
     }
   }
 
@@ -163,7 +190,7 @@ export function ReplayView() {
                     <h3>{detail.environment}</h3>
                   </div>
                 </header>
-                <MatchState state={turn.state_after_json} />
+                <MatchState environment={detail.environment} state={turn.state_after_json} />
               </article>
             </section>
 

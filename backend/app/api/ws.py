@@ -21,6 +21,7 @@ import logging
 import os
 import time
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
@@ -28,7 +29,8 @@ from sqlmodel import Session
 
 from app.agents.registry import make_agent
 from app.contract.events import AgentConfig as ClientAgentConfig
-from app.contract.events import ClientEvent, ErrorEvent, ServerEvent
+from app.contract.events import ClientEvent, ErrorEvent, MatchEnded, ServerEvent
+from app.contract.models import Match
 from app.contract.interfaces import Agent
 from app.contract.interfaces import AgentConfig as EnvAgentConfig
 from app.db import engine
@@ -87,6 +89,27 @@ async def _run_match(
             async for event in orchestrator.run(match_id, session=session):
                 await queue.put(event)
     except asyncio.CancelledError:
+        def mark_cancelled() -> None:
+            with Session(engine) as session:
+                match = session.get(Match, match_id)
+                if match is None:
+                    match = Match(id=match_id, environment=environment)
+                match.status = "cancelled"
+                match.reason = "cancelled"
+                match.outcome = "Cancelled by user"
+                match.ended_at = datetime.now(UTC)
+                session.add(match)
+                session.commit()
+
+        await asyncio.to_thread(mark_cancelled)
+        await queue.put(
+            MatchEnded(
+                match_id=match_id,
+                outcome="Cancelled by user",
+                final_scores={},
+                reason="cancelled",
+            )
+        )
         raise
     except Exception as exc:  # noqa: BLE001 - a bad match must not crash the socket
         logger.exception("Match %s failed", match_id)
@@ -152,9 +175,6 @@ async def match_socket(websocket: WebSocket) -> None:
                 task = match_tasks.pop(event.match_id, None)
                 if task is not None:
                     task.cancel()
-                    await queue.put(
-                        ErrorEvent(match_id=event.match_id, recoverable=False, message="cancelled")
-                    )
                 else:
                     await queue.put(
                         ErrorEvent(

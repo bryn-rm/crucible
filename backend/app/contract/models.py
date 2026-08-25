@@ -24,7 +24,7 @@ class Match(SQLModel, table=True):
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     environment: str
-    status: str = Field(default="pending")  # pending | running | completed | error | cancelled
+    status: str = Field(default="pending", index=True)  # pending | running | completed | error | cancelled
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     ended_at: Optional[datetime] = None
     outcome: Optional[str] = None
@@ -68,3 +68,23 @@ class Score(SQLModel, table=True):
     agent_id: str
     dimension: str  # e.g. "payoff", "toughness", "fairness", "probing_quality"
     value: float
+
+
+class Tournament(SQLModel, table=True):
+    __tablename__ = "tournaments"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    requested: int
+    concurrency: int
+    status: str = Field(default="running", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
+    ended_at: Optional[datetime] = None
+
+
+class TournamentResult(SQLModel, table=True):
+    __tablename__ = "tournament_results"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    tournament_id: str = Field(foreign_key="tournaments.id", index=True)
+    position: int
+    result_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))

@@ -30,12 +30,12 @@ def _clean_db():
     yield
     from sqlmodel import Session, select
 
-    from app.contract.models import Match, MatchAgent, Score, Turn
+    from app.contract.models import Match, MatchAgent, Score, Tournament, TournamentResult, Turn
     from app.db import engine, init_db
 
     init_db()
     with Session(engine) as session:
-        for model in (Score, Turn, MatchAgent, Match):
+        for model in (TournamentResult, Tournament, Score, Turn, MatchAgent, Match):
             for row in session.exec(select(model)):
                 session.delete(row)
         session.commit()

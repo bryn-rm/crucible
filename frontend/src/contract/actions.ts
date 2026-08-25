@@ -19,7 +19,11 @@ export interface WalkAction {
   type: 'walk';
 }
 
-export type NegotiationAction = OfferAction | AcceptAction | WalkAction;
+export interface ForfeitAction {
+  type: 'forfeit';
+}
+
+export type NegotiationAction = OfferAction | AcceptAction | WalkAction | ForfeitAction;
 
 // --- Role-play ---
 
@@ -32,4 +36,4 @@ export interface EndInterviewAction {
   type: 'end_interview';
 }
 
-export type RolePlayAction = SayAction | EndInterviewAction;
+export type RolePlayAction = SayAction | EndInterviewAction | ForfeitAction;

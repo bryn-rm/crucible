@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TournamentAgentConfig, TournamentResponse } from '../api/types';
 import { getTournament, runTournament } from '../lib/api';
 
@@ -8,6 +8,7 @@ const DEFAULT_AGENTS: TournamentAgentConfig[] = [
 ];
 
 export function TournamentView() {
+  const requestRef = useRef<AbortController | null>(null);
   const [agents, setAgents] = useState(DEFAULT_AGENTS);
   const [matches, setMatches] = useState(10);
   const [concurrency, setConcurrency] = useState(2);
@@ -16,26 +17,57 @@ export function TournamentView() {
   const [result, setResult] = useState<TournamentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function updateAgent(index: number, field: keyof TournamentAgentConfig, value: string) {
+  useEffect(() => () => requestRef.current?.abort(), []);
+
+  function updateAgent<K extends keyof TournamentAgentConfig>(
+    index: number,
+    field: K,
+    value: TournamentAgentConfig[K],
+  ) {
     setAgents((current) => current.map((agent, i) => i === index ? { ...agent, [field]: value } : agent));
   }
 
   async function start() {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setRunning(true);
     setResult(null);
     setError(null);
     try {
-      let current = await runTournament({ environment: 'negotiation', agents, matches, concurrency, seed });
+      let current = await runTournament(
+        { environment: 'negotiation', agents, matches, concurrency, seed },
+        controller.signal,
+      );
       setResult(current);
+      let failures = 0;
       while (current.status === 'running') {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        current = await getTournament(current.tournament_id);
-        setResult(current);
+        await new Promise<void>((resolve, reject) => {
+          const timer = window.setTimeout(resolve, Math.min(1000 * 2 ** failures, 8000));
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new DOMException('Aborted', 'AbortError'));
+          }, { once: true });
+        });
+        try {
+          current = await getTournament(current.tournament_id, controller.signal);
+          failures = 0;
+          setResult(current);
+        } catch (err) {
+          if (controller.signal.aborted) throw err;
+          failures += 1;
+          if (failures >= 5) throw err;
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Tournament failed');
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Tournament failed');
+      }
     } finally {
-      setRunning(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setRunning(false);
+      }
     }
   }
 
@@ -56,6 +88,7 @@ export function TournamentView() {
             <label>Agent label<input value={agent.label} onChange={(e) => updateAgent(index, 'label', e.target.value)} /></label>
             <label>Model<input value={agent.model} onChange={(e) => updateAgent(index, 'model', e.target.value)} /></label>
             <label>Strategy<textarea rows={3} value={agent.strategy_prompt} onChange={(e) => updateAgent(index, 'strategy_prompt', e.target.value)} /></label>
+            <label>Temperature<input type="number" min="0" max="2" step="0.1" value={agent.temperature} onChange={(e) => updateAgent(index, 'temperature', Number(e.target.value))} /></label>
           </article>
         ))}
         <article className="setup-card tournament-settings">

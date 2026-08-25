@@ -73,14 +73,26 @@ def _build_user_message(observation: Observation) -> str:
 
 
 def _parse_action(text: str) -> Action:
-    stripped = text.rstrip()
-    for start in range(len(stripped) - 1, -1, -1):
-        if stripped[start] != "{":
+    decoder = json.JSONDecoder()
+    # Prefer the last complete object, while allowing markdown fences or other
+    # harmless trailing text after it. raw_decode is linear for each candidate
+    # and avoids repeatedly allocating progressively larger suffixes.
+    parsed: Action | None = None
+    for start, character in enumerate(text):
+        if character != "{":
             continue
         try:
-            action = json.loads(stripped[start:])
+            action, _ = decoder.raw_decode(text, start)
         except json.JSONDecodeError:
             continue
-        if isinstance(action, dict):
-            return action
-    raise ValueError(f"no trailing JSON action found in response: {text!r}")
+        if isinstance(action, dict) and action.get("type") in {
+            "offer",
+            "accept",
+            "walk",
+            "say",
+            "end_interview",
+        }:
+            parsed = action
+    if parsed is not None:
+        return parsed
+    raise ValueError(f"no JSON action found in response: {text!r}")

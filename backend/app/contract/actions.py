@@ -30,8 +30,14 @@ class WalkAction(BaseModel):
     type: Literal["walk"] = "walk"
 
 
+class ForfeitAction(BaseModel):
+    """Synthetic action recorded when an agent exhausts its action retries."""
+
+    type: Literal["forfeit"] = "forfeit"
+
+
 NegotiationAction = Annotated[
-    Union[OfferAction, AcceptAction, WalkAction],
+    Union[OfferAction, AcceptAction, WalkAction, ForfeitAction],
     Field(discriminator="type"),
 ]
 
@@ -41,7 +47,7 @@ NegotiationAction = Annotated[
 
 class SayAction(BaseModel):
     type: Literal["say"] = "say"
-    text: str
+    text: str = Field(max_length=10_000)
 
 
 class EndInterviewAction(BaseModel):
@@ -49,6 +55,6 @@ class EndInterviewAction(BaseModel):
 
 
 RolePlayAction = Annotated[
-    Union[SayAction, EndInterviewAction],
+    Union[SayAction, EndInterviewAction, ForfeitAction],
     Field(discriminator="type"),
 ]
